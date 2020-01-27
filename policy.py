@@ -52,16 +52,23 @@ class Policy(object):
         old_logp = self.logprob_calc([actions, old_means, old_logvars])
         old_logp = old_logp.numpy()
         loss, kl = 0, 0
+        filepath = "keras-weights.h5"
         for e in range(self.epochs):
             loss = self.trpo.train_on_batch([observes, actions, advantages,
                                              old_means, old_logvars, old_logp])
 
             kl = self.trpo.predict_on_batch([observes, actions, advantages,
                                                       old_means, old_logvars, old_logp])
+
             kl = np.mean(kl)
-            if kl > self.kl_targ * 4:  # early stopping if D_KL diverges badly
+            if kl > self.kl_targ:  # early stopping if D_KL diverges badly
+                self.trpo.load_weights(filepath)
                 break
-        
+            else:
+                self.trpo.save_weights(filepath)
+                kl = self.trpo.predict_on_batch([observes, actions, advantages,
+                                                      old_means, old_logvars, old_logp])
+        """
         # TODO: too many "magic numbers" in next 8 lines of code, need to clean up
         if kl > self.kl_targ * 2:  # servo beta to reach D_KL target
             self.beta = np.minimum(35, 1.5 * self.beta)  # max clip beta
@@ -71,6 +78,8 @@ class Policy(object):
             self.beta = np.maximum(1 / 35, self.beta / 1.5)  # min clip beta
             if self.beta < (1 / 30) and self.lr_multiplier < 10:
                 self.lr_multiplier *= 1.5
+
+        """
         
 
 class PolicyNN(Layer):

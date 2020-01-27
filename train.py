@@ -12,18 +12,18 @@ from value import NNValueFunction
 import scipy.signal
 from utils import plotLearning
 
-env_name = 'MountainCarContinuous-v0'   
-num_episodes=5000
+env_name = 'LunarLanderContinuous-v2'   
+num_episodes=500
 gamma = 0.995                   # Discount factor
 lam = 0.98                      # Lambda for Generalized Advantage Estimation
-kl_targ = 0.001                 # D_KL target value
+kl_targ = 0.003                 # D_KL target value
 batch_size = 5                 # Number of episodes per training batch
 hid1_size = 32                  # Size of the first hidden layer for value and policy NNs
 init_logvar = -1.0              # Initial policy natural log of variance
 
 
 def init_gym(env_name):
-    env = gym.make('MountainCarContinuous-v0')
+    env = gym.make(env_name)
     obs_dim = env.observation_space.shape[0]
     act_dim = env.action_space.shape[0]
 
