@@ -1,7 +1,5 @@
 """
 NN Policy with KL Divergence Constraint
-
-Written by Patrick Coady (pat-coady.github.io)
 """
 import tensorflow.keras.backend as K
 from tensorflow.keras import Model
@@ -53,13 +51,14 @@ class Policy(object):
         old_logvars = old_logvars.numpy()
         old_logp = self.logprob_calc([actions, old_means, old_logvars])
         old_logp = old_logp.numpy()
-        loss, kl, entropy = 0, 0, 0
+        loss, kl = 0, 0
         for e in range(self.epochs):
             loss = self.trpo.train_on_batch([observes, actions, advantages,
                                              old_means, old_logvars, old_logp])
-            kl, entropy = self.trpo.predict_on_batch([observes, actions, advantages,
+
+            kl = self.trpo.predict_on_batch([observes, actions, advantages,
                                                       old_means, old_logvars, old_logp])
-            kl, entropy = np.mean(kl), np.mean(entropy)
+            kl = np.mean(kl)
             if kl > self.kl_targ * 4:  # early stopping if D_KL diverges badly
                 break
         
@@ -101,6 +100,7 @@ class PolicyNN(Layer):
                                        trainable=True, initializer='zeros')
         print('Policy Params -- h1: {}, h2: {}, h3: {}, lr: {:.3g}, logvar_speed: {}'
               .format(hid1_units, hid2_units, hid3_units, self.lr, logvar_speed))
+        
 
     def build(self, input_shape):
         self.batch_sz = input_shape[0]
@@ -119,7 +119,7 @@ class PolicyNN(Layer):
         return self.lr
 
 
-class KLEntropy(Layer):
+class KLDiv(Layer):
     """
     Layer calculates:
         1. KL divergence between old and new distributions
@@ -129,7 +129,7 @@ class KLEntropy(Layer):
     https://en.wikipedia.org/wiki/Multivariate_normal_distribution#Entropy
     """
     def __init__(self, **kwargs):
-        super(KLEntropy, self).__init__(**kwargs)
+        super(KLDiv, self).__init__(**kwargs)
         self.act_dim = None
 
     def build(self, input_shape):
@@ -144,10 +144,8 @@ class KLEntropy(Layer):
                     K.sum(K.square(new_means - old_means) /
                           K.exp(new_logvars), axis=-1, keepdims=True) -
                     np.float32(self.act_dim))
-        entropy = 0.5 * (np.float32(self.act_dim) * (np.log(2 * np.pi) + 1.0) +
-                         K.sum(new_logvars, axis=-1, keepdims=True))
 
-        return [kl, entropy]
+        return kl
 
 
 class LogProb(Layer):
@@ -171,18 +169,22 @@ class TRPO(Model):
         self.beta = self.add_weight('beta', initializer='zeros', trainable=False)
         self.policy = PolicyNN(obs_dim, act_dim, hid1_size, init_logvar)
         self.logprob = LogProb()
-        self.kl_entropy = KLEntropy()
+        self.kl_div = KLDiv()
 
     def call(self, inputs):
         obs, act, adv, old_means, old_logvars, old_logp = inputs
         new_means, new_logvars = self.policy(obs)
         new_logp = self.logprob([act, new_means, new_logvars])
-        kl, entropy = self.kl_entropy([old_means, old_logvars,
+        kl = self.kl_div([old_means, old_logvars,
                                        new_means, new_logvars])
+        
         loss1 = -K.mean(adv * K.exp(new_logp - old_logp))
+        """
         loss2 = K.mean(self.beta * kl)
         # TODO - Take mean before or after hinge loss?
         loss3 = self.eta * K.square(K.maximum(0.0, K.mean(kl) - 2.0 * self.kl_targ))
         self.add_loss(loss1 + loss2 + loss3)
+        """
+        self.add_loss(loss1)
 
-        return [kl, entropy]
+        return kl

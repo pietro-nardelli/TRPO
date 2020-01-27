@@ -1,27 +1,6 @@
 #! /usr/bin/env python3
 """
 TRPO: Trust Region Policy Optimization
-
-Written by Patrick Coady (pat-coady.github.io)
-
-See these papers for details:
-
-TRPO / PPO:
-https://arxiv.org/pdf/1502.05477.pdf (Schulman et al., 2016)
-
-Distributed PPO:
-https://arxiv.org/abs/1707.02286 (Heess et al., 2017)
-
-Generalized Advantage Estimation:
-https://arxiv.org/pdf/1506.02438.pdf
-
-And, also, this GitHub repo which was helpful to me during
-implementation:
-https://github.com/joschu/modular_rl
-
-This implementation learns policies for continuous environments
-in the OpenAI Gym (https://gym.openai.com/). Testing was focused on
-the MuJoCo control tasks.
 """
 
 
@@ -34,12 +13,12 @@ import scipy.signal
 from utils import plotLearning
 
 env_name = 'MountainCarContinuous-v0'   
-num_episodes=1000
+num_episodes=5000
 gamma = 0.995                   # Discount factor
 lam = 0.98                      # Lambda for Generalized Advantage Estimation
-kl_targ = 0.003                 # D_KL target value
+kl_targ = 0.001                 # D_KL target value
 batch_size = 5                 # Number of episodes per training batch
-hid1_size = 64                  # Size of the first hidden layer for value and policy NNs
+hid1_size = 32                  # Size of the first hidden layer for value and policy NNs
 init_logvar = -1.0              # Initial policy natural log of variance
 
 
@@ -218,12 +197,7 @@ def build_train_set(trajectories):
     return observes, actions, advantages, disc_sum_rew
 
 def avg_batch_rewards (trajectories):
-    """
-    Args: 
-        trajectories
-    Returns: 
-        avarage of rewards in the trajectories batch
-    """
+    """ Calculate avarage of rewards in the trajectories batch """
     total_reward = []
     for i in range(len(trajectories)):        
         total_reward.append(np.sum(trajectories[i]['rewards']))
@@ -247,10 +221,7 @@ env = gym.make(env_name)
 val_func = NNValueFunction(obs_dim, hid1_size)
 
 policy = Policy(obs_dim, act_dim, kl_targ, hid1_size, init_logvar)
-'''
-# run a few episodes of untrained policy to initialize scaler:
-run_policy(env, policy, episodes=5)
-'''
+
 episode = 0
 n_batch = 0
 reward_history = []
@@ -262,11 +233,9 @@ while episode < num_episodes:
     add_gae(trajectories, gamma, lam)  # calculate advantage
     # concatenate all episodes into single NumPy arrays
     observes, actions, advantages, disc_sum_rew = build_train_set(trajectories)
-    # add various stats to training log:
     
     policy.update(observes, actions, advantages)  # update policy
     val_func.fit(observes, disc_sum_rew)  # update value function
-
 
     #print avg of batch rewards and store the reward of each episode in the history 
     for i in range(len(trajectories)):        

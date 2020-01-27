@@ -1,7 +1,5 @@
 """
 State-Value Function
-
-Written by Patrick Coady (pat-coady.github.io)
 """
 from tensorflow.keras import Model
 from tensorflow.keras.layers import Input, Dense
@@ -12,16 +10,16 @@ import numpy as np
 
 class NNValueFunction(object):
     """ NN-based state-value function """
-    def __init__(self, obs_dim, hid1_mult):
+    def __init__(self, obs_dim, hid1):
         """
         Args:
             obs_dim: number of dimensions in observation vector (int)
-            hid1_mult: size of first hidden layer, multiplier of obs_dim
+            hid1: size of first hidden layer
         """
         self.replay_buffer_x = None
         self.replay_buffer_y = None
         self.obs_dim = obs_dim
-        self.hid1_mult = hid1_mult
+        self.hid1 = hid1
         self.epochs = 10
         self.lr = None  # learning rate set in _build_model()
         self.model = self._build_model()
@@ -30,8 +28,8 @@ class NNValueFunction(object):
         """ Construct TensorFlow graph, including loss function, init op and train op """
         obs = Input(shape=(self.obs_dim,), dtype='float32')
         # hid1 layer size is 10x obs_dim, hid3 size is 10, and hid2 is geometric mean
-        hid1_units = self.obs_dim * self.hid1_mult
-        hid3_units = 5  # 5 chosen empirically on 'Hopper-v1'
+        hid1_units = self.obs_dim * self.hid1
+        hid3_units = 5 
         hid2_units = int(np.sqrt(hid1_units * hid3_units))
         # heuristic to set learning rate based on NN size (tuned on 'Hopper-v1')
         self.lr = 1e-2 / np.sqrt(hid2_units)  # 1e-2 empirically determined
@@ -68,9 +66,12 @@ class NNValueFunction(object):
         self.model.fit(x_train, y_train, epochs=self.epochs, batch_size=batch_size,
                        shuffle=True, verbose=0)
         y_hat = self.model.predict(x)
+        
+        """
         loss = np.mean(np.square(y_hat - y))         # explained variance after update
         exp_var = 1 - np.var(y - y_hat) / np.var(y)  # diagnose over-fitting of val func
-
+        """
+        
     def predict(self, x):
         """ Predict method """
         return self.model.predict(x)
