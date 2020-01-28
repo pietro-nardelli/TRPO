@@ -251,7 +251,6 @@ while episode < num_episodes:
     #print avg of batch rewards and store the reward of each episode in the history 
     for i in range(len(trajectories)):        
         reward_history.append(np.sum(trajectories[i]['rewards']))
-    reward_history.append(np.sum(trajectories[i]['rewards']))
     
     episode += len(trajectories)    
     n_batch += 1

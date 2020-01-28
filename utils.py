@@ -8,7 +8,7 @@ def plotLearning(scores, filename, x=None, window=5):
 	    running_avg[t] = np.mean(scores[max(0, t-window):(t+1)])
     if x is None:
         x = [i for i in range(N)]
-    plt.ylabel('Score')       
-    plt.xlabel('Game')                     
+    plt.ylabel('Reward')       
+    plt.xlabel('Episodes')                     
     plt.plot(x, running_avg)
     plt.savefig(filename)
