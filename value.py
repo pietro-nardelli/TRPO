@@ -52,10 +52,7 @@ class NNValueFunction(object):
             x: features
             y: target
         """
-        num_batches = max(x.shape[0] // 256, 1)
-        batch_size = x.shape[0] // num_batches
-        y_hat = self.model.predict(x)  # check explained variance prior to update
-        old_exp_var = 1 - np.var(y - y_hat)/np.var(y)
+
         if self.replay_buffer_x is None:
             x_train, y_train = x, y
         else:
@@ -63,14 +60,9 @@ class NNValueFunction(object):
             y_train = np.concatenate([y, self.replay_buffer_y])
         self.replay_buffer_x = x
         self.replay_buffer_y = y
-        self.model.fit(x_train, y_train, epochs=self.epochs, batch_size=batch_size,
+        self.model.fit(x_train, y_train, epochs=self.epochs,
                        shuffle=True, verbose=0)
-        y_hat = self.model.predict(x)
-        
-        """
-        loss = np.mean(np.square(y_hat - y))         # explained variance after update
-        exp_var = 1 - np.var(y - y_hat) / np.var(y)  # diagnose over-fitting of val func
-        """
+
         
     def predict(self, x):
         """ Predict method """

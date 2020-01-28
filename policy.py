@@ -78,7 +78,7 @@ class Policy(object):
                 kl = self.trpo.predict_on_batch([observes, actions, advantages,
                                                       old_means, old_logvars, old_logp])
         
-
+# Neural network that is used to calculate the policy approximation: SAMPLING
 class PolicyNN(Layer):
     """ Neural net for policy approximation function.
 
@@ -95,11 +95,12 @@ class PolicyNN(Layer):
         hid3_units = act_dim
         self.lr = 0.000225  
         
-        self.dense1 = Dense(hid1_units, activation='tanh', input_shape=(obs_dim,))
-        self.dense2 = Dense(hid2_units, activation='tanh', input_shape=(hid1_units,))
-        self.dense3 = Dense(hid3_units, activation='tanh', input_shape=(hid2_units,))
-        self.dense4 = Dense(act_dim, input_shape=(hid3_units,))
-
+        #Dense1,...,4 created because otherwise the computation was been too slow
+        self.dense1 = Dense(hid1_units, activation='tanh')
+        self.dense2 = Dense(hid2_units, activation='tanh')
+        self.dense3 = Dense(hid3_units, activation='tanh')
+        self.dense4 = Dense(act_dim)
+        
         self.logvars = self.add_weight(shape=(1,act_dim),
                                        trainable=True, initializer='zeros')
         print('Policy Params -- h1: {}, h2: {}, h3: {}, lr: {:.3g}'
@@ -120,7 +121,7 @@ class PolicyNN(Layer):
 
         return [means, logvars]
 
-
+#This is a class that permits us to compile the previous NN with a custom loss
 class TRPO(Model):
     def __init__(self, obs_dim, act_dim, hid1_size, kl_targ, init_logvar, **kwargs):
         super(TRPO, self).__init__(**kwargs)
@@ -142,12 +143,9 @@ class TRPO(Model):
 
         def KLDiv(inputs):
             """
-            Layer calculates:
-                1. KL divergence between old and new distributions
-                2. Entropy of present policy
+            Layer calculates KL divergence between old and new distributions
 
             https://en.wikipedia.org/wiki/Multivariate_normal_distribution#Kullback.E2.80.93Leibler_divergence
-            https://en.wikipedia.org/wiki/Multivariate_normal_distribution#Entropy
             """
 
 
@@ -170,9 +168,9 @@ class TRPO(Model):
                                         new_means, new_logvars])
         
         loss1 = -K.mean(adv * K.exp(new_logp - old_logp))
-        self.add_loss(loss1)
+        self.add_loss(loss1) #Compile with a custom loss
 
-        return kl
+        return kl #Return KL 
     
 
         

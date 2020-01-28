@@ -1,8 +1,6 @@
-#! /usr/bin/env python3
 """
 TRPO: Trust Region Policy Optimization
 """
-
 
 import gym
 from gym import wrappers
@@ -237,7 +235,7 @@ episode = 0
 n_batch = 0
 reward_history = []
 while episode < num_episodes:
-    trajectories = run_policy(env, policy, episodes=batch_size)
+    trajectories = run_policy(env, policy, episodes=5)
 
     add_value(trajectories, val_func)  # add estimated values to episodes
     add_disc_sum_rew(trajectories, gamma)  # calculated discounted sum of Rs
@@ -251,7 +249,6 @@ while episode < num_episodes:
     #print avg of batch rewards and store the reward of each episode in the history 
     for i in range(len(trajectories)):        
         reward_history.append(np.sum(trajectories[i]['rewards']))
-    
     episode += len(trajectories)    
     n_batch += 1
     
@@ -259,6 +256,7 @@ while episode < num_episodes:
 
     #plot the reward history
     filename = env_name+' plot_rewards.png'
+    
     plotLearning(reward_history, filename=filename, window=100)
 
 
