@@ -18,16 +18,21 @@ class Policy(object):
             hid1_size: size of first hidden layer
             init_logvar: natural log of initial policy variance
         """
-        self.beta = 1.0  # dynamically adjusted D_KL loss multiplier
-        eta = 50  # multiplier for D_KL-kl_targ hinge-squared loss
         self.kl_targ = kl_targ
         self.epochs = 20
-        self.lr_multiplier = 1.0  # dynamically adjust lr when D_KL out of control
-        self.trpo = TRPO(obs_dim, act_dim, hid1_size, kl_targ, init_logvar, eta)
+        self.trpo = TRPO(obs_dim, act_dim, hid1_size, kl_targ, init_logvar)
         self.policy = self.trpo.get_layer('policy_nn')
-        self.lr = self.policy.get_lr() 
-        self.trpo.compile(optimizer=Adam(self.lr * self.lr_multiplier))
-        self.logprob_calc = LogProb()
+        self.lr = 0.000225
+        self.trpo.compile(optimizer=Adam(self.lr))
+
+    def LogProb(self, inputs):
+        """Calculates log probabilities of a batch of actions."""
+        actions, act_means, act_logvars = inputs
+        logp = -0.5 * K.sum(act_logvars, axis=-1, keepdims=True)
+        logp += -0.5 * K.sum(K.cast(K.square(actions - act_means), dtype='float32') / K.exp(act_logvars),
+                            axis=-1, keepdims=True)
+        return logp
+
 
     def sample(self, obs):
         """Draw sample from policy."""
@@ -35,7 +40,7 @@ class Policy(object):
         # logvar = log(sigma^2) => sigma^2 = e^logvar => sigma = sqrt(e^logvar)
         act_stddevs = np.exp(act_logvars / 2)
 
-        return np.random.normal(act_means, act_stddevs).astype(np.float32)
+        return np.random.normal(act_means, act_stddevs).astype(np.float64)
 
     def update(self, observes, actions, advantages):
         """ Update policy based on observations, actions and advantages
@@ -45,14 +50,17 @@ class Policy(object):
             actions: actions, shape = (N, act_dim)
             advantages: advantages, shape = (N,)
         """
-        K.set_value(self.trpo.optimizer.lr, self.lr * self.lr_multiplier)
-        K.set_value(self.trpo.beta, self.beta)
+        K.set_value(self.trpo.optimizer.lr, self.lr)
         old_means, old_logvars = self.policy(observes)
         old_means = old_means.numpy()
         old_logvars = old_logvars.numpy()
-        old_logp = self.logprob_calc([actions, old_means, old_logvars])
+
+        old_logp = self.LogProb([actions, old_means, old_logvars])
+
         old_logp = old_logp.numpy()
         loss, kl = 0, 0
+        
+        
         filepath = "keras-weights.h5"
         for e in range(self.epochs):
             loss = self.trpo.train_on_batch([observes, actions, advantages,
@@ -86,7 +94,7 @@ class PolicyNN(Layer):
         hid2_units = hid1_size/2  
         hid3_units = act_dim
         self.lr = 0.000225  
-        # heuristic to set learning rate based on NN size (tuned on 'Hopper-v1')
+        
         self.dense1 = Dense(hid1_units, activation='tanh', input_shape=(obs_dim,))
         self.dense2 = Dense(hid2_units, activation='tanh', input_shape=(hid1_units,))
         self.dense3 = Dense(hid3_units, activation='tanh', input_shape=(hid2_units,))
@@ -112,76 +120,60 @@ class PolicyNN(Layer):
 
         return [means, logvars]
 
-    def get_lr(self):
-        return self.lr
-
-
-class KLDiv(Layer):
-    """
-    Layer calculates:
-        1. KL divergence between old and new distributions
-        2. Entropy of present policy
-
-    https://en.wikipedia.org/wiki/Multivariate_normal_distribution#Kullback.E2.80.93Leibler_divergence
-    https://en.wikipedia.org/wiki/Multivariate_normal_distribution#Entropy
-    """
-    def __init__(self, **kwargs):
-        super(KLDiv, self).__init__(**kwargs)
-        self.act_dim = None
-
-    def build(self, input_shape):
-        self.act_dim = input_shape[0][1]
-
-    def call(self, inputs, **kwargs):
-        old_means, old_logvars, new_means, new_logvars = inputs
-        log_det_cov_old = K.sum(old_logvars, axis=-1, keepdims=True)
-        log_det_cov_new = K.sum(new_logvars, axis=-1, keepdims=True)
-        trace_old_new = K.sum(K.exp(old_logvars - new_logvars), axis=-1, keepdims=True)
-        kl = 0.5 * (log_det_cov_new - log_det_cov_old + trace_old_new +
-                    K.sum(K.square(new_means - old_means) /
-                          K.exp(new_logvars), axis=-1, keepdims=True) -
-                    np.float32(self.act_dim))
-
-        return kl
-
-
-class LogProb(Layer):
-    """Layer calculates log probabilities of a batch of actions."""
-    def __init__(self, **kwargs):
-        super(LogProb, self).__init__(**kwargs)
-
-    def call(self, inputs, **kwargs):
-        actions, act_means, act_logvars = inputs
-        logp = -0.5 * K.sum(act_logvars, axis=-1, keepdims=True)
-        logp += -0.5 * K.sum(K.square(actions - act_means) / K.exp(act_logvars),
-                             axis=-1, keepdims=True)
-        return logp
-
 
 class TRPO(Model):
-    def __init__(self, obs_dim, act_dim, hid1_size, kl_targ, init_logvar, eta, **kwargs):
+    def __init__(self, obs_dim, act_dim, hid1_size, kl_targ, init_logvar, **kwargs):
         super(TRPO, self).__init__(**kwargs)
         self.kl_targ = kl_targ
-        self.eta = eta
-        self.beta = self.add_weight('beta', initializer='zeros', trainable=False)
         self.policy = PolicyNN(obs_dim, act_dim, hid1_size, init_logvar)
-        self.logprob = LogProb()
-        self.kl_div = KLDiv()
+        self.act_dim = act_dim
 
     def call(self, inputs):
         obs, act, adv, old_means, old_logvars, old_logp = inputs
         new_means, new_logvars = self.policy(obs)
-        new_logp = self.logprob([act, new_means, new_logvars])
-        kl = self.kl_div([old_means, old_logvars,
-                                       new_means, new_logvars])
+
+        def LogProb(inputs):
+            """Calculates log probabilities of a batch of actions."""
+            actions, act_means, act_logvars = inputs
+            logp = -0.5 * K.sum(act_logvars, axis=-1, keepdims=True)
+            logp += -0.5 * K.sum(K.cast(K.square(actions - act_means), dtype='float32') / K.exp(act_logvars),
+                                axis=-1, keepdims=True)
+            return logp
+
+        def KLDiv(inputs):
+            """
+            Layer calculates:
+                1. KL divergence between old and new distributions
+                2. Entropy of present policy
+
+            https://en.wikipedia.org/wiki/Multivariate_normal_distribution#Kullback.E2.80.93Leibler_divergence
+            https://en.wikipedia.org/wiki/Multivariate_normal_distribution#Entropy
+            """
+
+
+            old_means, old_logvars, new_means, new_logvars = inputs
+            log_det_cov_old = K.sum(old_logvars, axis=-1, keepdims=True)
+            log_det_cov_new = K.sum(new_logvars, axis=-1, keepdims=True)
+            trace_old_new = K.sum(K.exp(old_logvars - new_logvars), axis=-1, keepdims=True)
+            kl = 0.5 * (log_det_cov_new - log_det_cov_old + trace_old_new +
+                        K.sum(K.square(new_means - old_means) /
+                            K.exp(new_logvars), axis=-1, keepdims=True) -
+                        np.float64(self.act_dim))
+
+            return kl
+
+
+
+
+        new_logp = LogProb([act, new_means, new_logvars])
+        kl = KLDiv([old_means, old_logvars,
+                                        new_means, new_logvars])
         
         loss1 = -K.mean(adv * K.exp(new_logp - old_logp))
-        """
-        loss2 = K.mean(self.beta * kl)
-        # TODO - Take mean before or after hinge loss?
-        loss3 = self.eta * K.square(K.maximum(0.0, K.mean(kl) - 2.0 * self.kl_targ))
-        self.add_loss(loss1 + loss2 + loss3)
-        """
         self.add_loss(loss1)
 
         return kl
+    
+
+        
+

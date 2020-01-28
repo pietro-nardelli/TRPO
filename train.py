@@ -12,8 +12,8 @@ from value import NNValueFunction
 import scipy.signal
 from utils import plotLearning
 
-env_name = 'MountainCarContinuous-v0'   
-#env_name = 'LunarLanderContinuous-v2'   
+#env_name = 'MountainCarContinuous-v0'   
+env_name = 'LunarLanderContinuous-v2'   
 
 num_episodes=500
 gamma = 0.995                   # Discount factor
@@ -237,7 +237,7 @@ episode = 0
 n_batch = 0
 reward_history = []
 while episode < num_episodes:
-    trajectories = run_policy(env, policy, episodes=2)
+    trajectories = run_policy(env, policy, episodes=batch_size)
 
     add_value(trajectories, val_func)  # add estimated values to episodes
     add_disc_sum_rew(trajectories, gamma)  # calculated discounted sum of Rs
