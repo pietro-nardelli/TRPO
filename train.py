@@ -258,7 +258,7 @@ while episode < num_episodes:
     print ("Batch: "+str(n_batch)+" Reward avg: "+str(avg_batch_rewards(trajectories)))
 
     #plot the reward history
-    filename = 'plot_rewards.png'
+    filename = env_name+' plot_rewards.png'
     plotLearning(reward_history, filename=filename, window=100)
 
 
