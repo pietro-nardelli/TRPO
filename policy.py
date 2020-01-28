@@ -25,13 +25,14 @@ class Policy(object):
         self.lr_multiplier = 1.0  # dynamically adjust lr when D_KL out of control
         self.trpo = TRPO(obs_dim, act_dim, hid1_size, kl_targ, init_logvar, eta)
         self.policy = self.trpo.get_layer('policy_nn')
-        self.lr = self.policy.get_lr()  # lr calculated based on size of PolicyNN
+        self.lr = self.policy.get_lr() 
         self.trpo.compile(optimizer=Adam(self.lr * self.lr_multiplier))
         self.logprob_calc = LogProb()
 
     def sample(self, obs):
         """Draw sample from policy."""
         act_means, act_logvars = self.policy(obs)
+        # logvar = log(sigma^2) => sigma^2 = e^logvar => sigma = sqrt(e^logvar)
         act_stddevs = np.exp(act_logvars / 2)
 
         return np.random.normal(act_means, act_stddevs).astype(np.float32)
@@ -68,18 +69,6 @@ class Policy(object):
                 self.trpo.save_weights(filepath)
                 kl = self.trpo.predict_on_batch([observes, actions, advantages,
                                                       old_means, old_logvars, old_logp])
-        """
-        # TODO: too many "magic numbers" in next 8 lines of code, need to clean up
-        if kl > self.kl_targ * 2:  # servo beta to reach D_KL target
-            self.beta = np.minimum(35, 1.5 * self.beta)  # max clip beta
-            if self.beta > 30 and self.lr_multiplier > 0.1:
-                self.lr_multiplier /= 1.5
-        elif kl < self.kl_targ / 2:
-            self.beta = np.maximum(1 / 35, self.beta / 1.5)  # min clip beta
-            if self.beta < (1 / 30) and self.lr_multiplier < 10:
-                self.lr_multiplier *= 1.5
-
-        """
         
 
 class PolicyNN(Layer):
@@ -96,19 +85,17 @@ class PolicyNN(Layer):
         hid1_units = hid1_size
         hid2_units = hid1_size/2  
         hid3_units = act_dim
-        self.lr = 9e-4 / np.sqrt(hid2_units)  
+        self.lr = 0.000225  
         # heuristic to set learning rate based on NN size (tuned on 'Hopper-v1')
         self.dense1 = Dense(hid1_units, activation='tanh', input_shape=(obs_dim,))
         self.dense2 = Dense(hid2_units, activation='tanh', input_shape=(hid1_units,))
         self.dense3 = Dense(hid3_units, activation='tanh', input_shape=(hid2_units,))
         self.dense4 = Dense(act_dim, input_shape=(hid3_units,))
-        # logvar_speed increases learning rate for log-variances.
-        # heuristic sets logvar_speed based on network size.
-        logvar_speed = (10 * hid3_units) // 48
-        self.logvars = self.add_weight(shape=(logvar_speed, act_dim),
+
+        self.logvars = self.add_weight(shape=(1,act_dim),
                                        trainable=True, initializer='zeros')
-        print('Policy Params -- h1: {}, h2: {}, h3: {}, lr: {:.3g}, logvar_speed: {}'
-              .format(hid1_units, hid2_units, hid3_units, self.lr, logvar_speed))
+        print('Policy Params -- h1: {}, h2: {}, h3: {}, lr: {:.3g}'
+              .format(hid1_units, hid2_units, hid3_units, self.lr))
         
 
     def build(self, input_shape):
@@ -119,6 +106,7 @@ class PolicyNN(Layer):
         y = self.dense2(y)
         y = self.dense3(y)
         means = self.dense4(y)
+        logvars = self.dense4(y)
         logvars = K.sum(self.logvars, axis=0, keepdims=True) + self.init_logvar
         logvars = K.tile(logvars, (self.batch_sz, 1))
 

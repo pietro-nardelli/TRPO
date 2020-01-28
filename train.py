@@ -12,14 +12,17 @@ from value import NNValueFunction
 import scipy.signal
 from utils import plotLearning
 
-env_name = 'LunarLanderContinuous-v2'   
+env_name = 'MountainCarContinuous-v0'   
+#env_name = 'LunarLanderContinuous-v2'   
+
 num_episodes=500
 gamma = 0.995                   # Discount factor
 lam = 0.98                      # Lambda for Generalized Advantage Estimation
-kl_targ = 0.003                 # D_KL target value
+kl_targ = 0.005                 # D_KL target value
 batch_size = 5                 # Number of episodes per training batch
 hid1_size = 32                  # Size of the first hidden layer for value and policy NNs
 init_logvar = -1.0              # Initial policy natural log of variance
+eps = 0.2
 
 
 def init_gym(env_name):
@@ -30,14 +33,13 @@ def init_gym(env_name):
     return env, obs_dim, act_dim
 
 
-def run_episode(env, policy, animate=True):
+def run_episode(env, policy, eps, animate=True):
     """Run single episode with option to animate.
 
     Args:
         env: ai gym environment
         policy: policy object with sample() method
-        scaler: scaler object, used to scale/offset each observation dimension
-            to a similar range
+        eps: epsilon-greedy parameter
         animate: boolean, True uses env.render() method to animate episode
 
     Returns: 3-tuple of NumPy arrays and 1 float
@@ -60,11 +62,20 @@ def run_episode(env, policy, animate=True):
         
         observes.append(obs)
 
-        action = policy.sample(obs)
+        #take an action from the policy
+        if (np.random.uniform(0,1) > eps):
+            action = policy.sample(obs)
+
+        else:
+            #take a random action, based on the dimension of the action space
+            action = np.zeros((1,env.action_space.shape[0]))
+            for i in range(env.action_space.shape[0]):
+                random_sample = env.action_space.sample()
+                action [0][i]= random_sample[i]
+        
         actions.append(action)
         obs, reward, done, _ = env.step(action.flatten())
         rewards.append(reward)
-        step += 1e-3  # increment time step feature
         totalReward += reward
         
     return (np.concatenate(observes), np.concatenate(actions),
@@ -87,7 +98,7 @@ def run_policy(env, policy, episodes):
     total_steps = 0
     trajectories = []
     for e in range(episodes):
-        observes, actions, rewards, totalReward = run_episode(env, policy)
+        observes, actions, rewards, totalReward = run_episode(env, policy, eps)
         # print(observes.shape)
         # print(actions.shape)
         # print(rewards.shape)
@@ -226,7 +237,7 @@ episode = 0
 n_batch = 0
 reward_history = []
 while episode < num_episodes:
-    trajectories = run_policy(env, policy, episodes=batch_size)
+    trajectories = run_policy(env, policy, episodes=2)
 
     add_value(trajectories, val_func)  # add estimated values to episodes
     add_disc_sum_rew(trajectories, gamma)  # calculated discounted sum of Rs
@@ -247,7 +258,9 @@ while episode < num_episodes:
     
     print ("Batch: "+str(n_batch)+" Reward avg: "+str(avg_batch_rewards(trajectories)))
 
-#plot the reward history
-filename = 'plot_rewards.png'
-plotLearning(reward_history, filename=filename, window=100)
+    #plot the reward history
+    filename = 'plot_rewards.png'
+    plotLearning(reward_history, filename=filename, window=100)
+
+
 
