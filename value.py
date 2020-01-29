@@ -26,12 +26,11 @@ class NNValueFunction(object):
     def _build_model(self):
         """ Construct TensorFlow graph, including loss function, init op and train op """
         obs = Input(shape=(self.obs_dim,), dtype='float32')
-        hid1_units = self.hid1
-        hid2_units = hid1_units/2 
-        hid3_units = hid2_units/2
+        hid1_units = self.obs_dim * self.hid1
+        hid2_units = hid1_units/4 
+        hid3_units = 5
 
-        # heuristic to set learning rate based on NN size (tuned on 'Hopper-v1')
-        self.lr = 1e-2 / np.sqrt(hid2_units)  # 1e-2 empirically determined
+        self.lr = 0.005
         print('Value Params -- h1: {}, h2: {}, h3: {}, lr: {:.3g}'
               .format(hid1_units, hid2_units, hid3_units, self.lr))
         y = Dense(hid1_units, activation='tanh')(obs)

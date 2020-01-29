@@ -9,17 +9,18 @@ import numpy as np
 
 
 class Policy(object):
-    def __init__(self, obs_dim, act_dim, kl_targ, hid1_size):
+    def __init__(self, obs_dim, act_dim, kl_targ, hid1_size, init_logvar):
         """
         Args:
             obs_dim: num observation dimensions (int)
             act_dim: num action dimensions (int)
             kl_targ: target KL divergence between pi_old and pi_new
             hid1_size: size of first hidden layer
+            init_logvar: natural log of initial policy variance
         """
         self.kl_targ = kl_targ
         self.epochs = 20
-        self.trpo = TRPO(obs_dim, act_dim, hid1_size, kl_targ)
+        self.trpo = TRPO(obs_dim, act_dim, hid1_size, kl_targ, init_logvar)
         self.policy = self.trpo.get_layer('policy_nn')
         self.lr = 0.000225
         self.trpo.compile(optimizer=Adam(self.lr))
@@ -84,13 +85,14 @@ class PolicyNN(Layer):
      action based on observation. Trainable variables hold log-variances
      for each action dimension (i.e. variances not determined by NN).
     """
-    def __init__(self, obs_dim, act_dim, hid1_size, **kwargs):
+    def __init__(self, obs_dim, act_dim, hid1_size, init_logvar, **kwargs):
         super(PolicyNN, self).__init__(**kwargs)
         self.batch_sz = None
-        hid1_units = hid1_size
+        hid1_units = hid1_size * obs_dim
         hid2_units = hid1_units/2  
-        hid3_units = hid2_units/2
+        hid3_units = act_dim
         self.lr = 0.000225  
+        self.init_logvar = init_logvar
         
         #Dense1,...,4 created because otherwise the computation was been too slow
         self.dense1 = Dense(hid1_units, activation='tanh')
@@ -98,6 +100,8 @@ class PolicyNN(Layer):
         self.dense3 = Dense(hid3_units, activation='tanh')
         self.dense4 = Dense(act_dim)        
 
+        self.logvars = self.add_weight(shape=(1,act_dim),
+                                       trainable=True, initializer='zeros')
     def build(self, input_shape):
         self.batch_sz = input_shape[0]
 
@@ -106,17 +110,17 @@ class PolicyNN(Layer):
         y = self.dense2(y)
         y = self.dense3(y)
         means = self.dense4(y)
-        logvars = self.dense4(y)
-        
+
+        logvars = self.logvars + self.init_logvar
         return [means, logvars]
 
 #This is a class that permits us to compile the previous NN with a custom loss and compute KL
 #In Keras API it can be a Model so we can call the policyNN easily and fast
 class TRPO(Model):
-    def __init__(self, obs_dim, act_dim, hid1_size, kl_targ, **kwargs):
+    def __init__(self, obs_dim, act_dim, hid1_size, kl_targ, init_logvar, **kwargs):
         super(TRPO, self).__init__(**kwargs)
         self.kl_targ = kl_targ
-        self.policy = PolicyNN(obs_dim, act_dim, hid1_size)
+        self.policy = PolicyNN(obs_dim, act_dim, hid1_size, init_logvar)
         self.act_dim = act_dim
 
     def call(self, inputs):
