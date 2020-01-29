@@ -19,7 +19,6 @@ lam = 0.98                      # Lambda for Generalized Advantage Estimation
 kl_targ = 0.005                 # D_KL target value
 batch_size = 5                 # Number of episodes per training batch
 hid1_size = 32                  # Size of the first hidden layer for value and policy NNs
-init_logvar = -1.0              # Initial policy natural log of variance
 eps = 0.2
 
 
@@ -31,7 +30,7 @@ def init_gym(env_name):
     return env, obs_dim, act_dim
 
 
-def run_episode(env, policy, eps, animate=True):
+def run_episode(env, policy, eps, animate=False):
     """Run single episode with option to animate.
 
     Args:
@@ -223,13 +222,12 @@ Args:
     kl_targ: D_KL target for policy update [D_KL(pi_old || pi_new)
     batch_size: number of episodes per policy training batch
     hid1_size: hid1 size for policy and value_f
-    init_logvar: natural log of initial policy variance
 """
 env, obs_dim, act_dim = init_gym(env_name)
 env = gym.make(env_name)
 val_func = NNValueFunction(obs_dim, hid1_size)
 
-policy = Policy(obs_dim, act_dim, kl_targ, hid1_size, init_logvar)
+policy = Policy(obs_dim, act_dim, kl_targ, hid1_size)
 
 episode = 0
 n_batch = 0

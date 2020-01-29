@@ -14,5 +14,6 @@ def plotLearning(scores, filename, x=None, window=5):
     plt.xlabel('Episodes')
 
     plt.plot(x, running_avg, 'c-')
-    plt.plot(x, scores, 'c-', alpha=0.2)
+    #plt.plot(x, scores, 'c-', alpha=0)
+    plt.plot()
     plt.savefig(filename)

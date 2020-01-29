@@ -7,7 +7,6 @@ from tensorflow.keras.optimizers import Adam
 
 import numpy as np
 
-
 class NNValueFunction(object):
     """ NN-based state-value function """
     def __init__(self, obs_dim, hid1):
@@ -27,10 +26,10 @@ class NNValueFunction(object):
     def _build_model(self):
         """ Construct TensorFlow graph, including loss function, init op and train op """
         obs = Input(shape=(self.obs_dim,), dtype='float32')
-        # hid1 layer size is 10x obs_dim, hid3 size is 10, and hid2 is geometric mean
-        hid1_units = self.obs_dim * self.hid1
-        hid3_units = 5 
-        hid2_units = int(np.sqrt(hid1_units * hid3_units))
+        hid1_units = self.hid1
+        hid2_units = hid1_units/2 
+        hid3_units = hid2_units/2
+
         # heuristic to set learning rate based on NN size (tuned on 'Hopper-v1')
         self.lr = 1e-2 / np.sqrt(hid2_units)  # 1e-2 empirically determined
         print('Value Params -- h1: {}, h2: {}, h3: {}, lr: {:.3g}'
@@ -40,6 +39,7 @@ class NNValueFunction(object):
         y = Dense(hid3_units, activation='tanh')(y)
         y = Dense(1)(y)
         model = Model(inputs=obs, outputs=y)
+
         optimizer = Adam(self.lr)
         model.compile(optimizer=optimizer, loss='mse')
 
@@ -66,4 +66,5 @@ class NNValueFunction(object):
         
     def predict(self, x):
         """ Predict method """
+
         return self.model.predict(x)

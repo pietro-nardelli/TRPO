@@ -9,18 +9,17 @@ import numpy as np
 
 
 class Policy(object):
-    def __init__(self, obs_dim, act_dim, kl_targ, hid1_size, init_logvar):
+    def __init__(self, obs_dim, act_dim, kl_targ, hid1_size):
         """
         Args:
             obs_dim: num observation dimensions (int)
             act_dim: num action dimensions (int)
             kl_targ: target KL divergence between pi_old and pi_new
             hid1_size: size of first hidden layer
-            init_logvar: natural log of initial policy variance
         """
         self.kl_targ = kl_targ
         self.epochs = 20
-        self.trpo = TRPO(obs_dim, act_dim, hid1_size, kl_targ, init_logvar)
+        self.trpo = TRPO(obs_dim, act_dim, hid1_size, kl_targ)
         self.policy = self.trpo.get_layer('policy_nn')
         self.lr = 0.000225
         self.trpo.compile(optimizer=Adam(self.lr))
@@ -60,7 +59,6 @@ class Policy(object):
         old_logp = old_logp.numpy()
         loss, kl = 0, 0
         
-        
         filepath = "keras-weights.h5"
         for e in range(self.epochs):
             loss = self.trpo.train_on_batch([observes, actions, advantages,
@@ -78,7 +76,7 @@ class Policy(object):
                 kl = self.trpo.predict_on_batch([observes, actions, advantages,
                                                       old_means, old_logvars, old_logp])
         
-# Neural network that is used to calculate the policy approximation: SAMPLING
+# Neural network that is used to calculate the policy approximation returning means and logvar
 class PolicyNN(Layer):
     """ Neural net for policy approximation function.
 
@@ -86,26 +84,19 @@ class PolicyNN(Layer):
      action based on observation. Trainable variables hold log-variances
      for each action dimension (i.e. variances not determined by NN).
     """
-    def __init__(self, obs_dim, act_dim, hid1_size, init_logvar, **kwargs):
+    def __init__(self, obs_dim, act_dim, hid1_size, **kwargs):
         super(PolicyNN, self).__init__(**kwargs)
         self.batch_sz = None
-        self.init_logvar = init_logvar
         hid1_units = hid1_size
-        hid2_units = hid1_size/2  
-        hid3_units = act_dim
+        hid2_units = hid1_units/2  
+        hid3_units = hid2_units/2
         self.lr = 0.000225  
         
         #Dense1,...,4 created because otherwise the computation was been too slow
         self.dense1 = Dense(hid1_units, activation='tanh')
         self.dense2 = Dense(hid2_units, activation='tanh')
         self.dense3 = Dense(hid3_units, activation='tanh')
-        self.dense4 = Dense(act_dim)
-        
-        self.logvars = self.add_weight(shape=(1,act_dim),
-                                       trainable=True, initializer='zeros')
-        print('Policy Params -- h1: {}, h2: {}, h3: {}, lr: {:.3g}'
-              .format(hid1_units, hid2_units, hid3_units, self.lr))
-        
+        self.dense4 = Dense(act_dim)        
 
     def build(self, input_shape):
         self.batch_sz = input_shape[0]
@@ -116,17 +107,16 @@ class PolicyNN(Layer):
         y = self.dense3(y)
         means = self.dense4(y)
         logvars = self.dense4(y)
-        logvars = K.sum(self.logvars, axis=0, keepdims=True) + self.init_logvar
-        logvars = K.tile(logvars, (self.batch_sz, 1))
-
+        
         return [means, logvars]
 
-#This is a class that permits us to compile the previous NN with a custom loss
+#This is a class that permits us to compile the previous NN with a custom loss and compute KL
+#In Keras API it can be a Model so we can call the policyNN easily and fast
 class TRPO(Model):
-    def __init__(self, obs_dim, act_dim, hid1_size, kl_targ, init_logvar, **kwargs):
+    def __init__(self, obs_dim, act_dim, hid1_size, kl_targ, **kwargs):
         super(TRPO, self).__init__(**kwargs)
         self.kl_targ = kl_targ
-        self.policy = PolicyNN(obs_dim, act_dim, hid1_size, init_logvar)
+        self.policy = PolicyNN(obs_dim, act_dim, hid1_size)
         self.act_dim = act_dim
 
     def call(self, inputs):
@@ -148,7 +138,6 @@ class TRPO(Model):
             https://en.wikipedia.org/wiki/Multivariate_normal_distribution#Kullback.E2.80.93Leibler_divergence
             """
 
-
             old_means, old_logvars, new_means, new_logvars = inputs
             log_det_cov_old = K.sum(old_logvars, axis=-1, keepdims=True)
             log_det_cov_new = K.sum(new_logvars, axis=-1, keepdims=True)
@@ -157,21 +146,15 @@ class TRPO(Model):
                         K.sum(K.square(new_means - old_means) /
                             K.exp(new_logvars), axis=-1, keepdims=True) -
                         np.float64(self.act_dim))
-
             return kl
-
 
 
 
         new_logp = LogProb([act, new_means, new_logvars])
         kl = KLDiv([old_means, old_logvars,
                                         new_means, new_logvars])
-        
-        loss1 = -K.mean(adv * K.exp(new_logp - old_logp))
-        self.add_loss(loss1) #Compile with a custom loss
 
-        return kl #Return KL 
-    
+        loss = -K.mean(adv * K.exp(new_logp - old_logp))
+        self.add_loss(loss) #Compile with a custom loss
 
-        
-
+        return kl #Return KL
