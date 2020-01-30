@@ -1,0 +1,141 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath, amssymb, amscd, amsthm, amsfonts}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\graphicspath{ {./Images/} }
+\usepackage{hyperref}
+
+\oddsidemargin 0pt
+\evensidemargin 0pt
+\marginparwidth 40pt
+\marginparsep 10pt
+\topmargin -20pt
+\headsep 10pt
+\textheight 8.7in
+\textwidth 6.65in
+\linespread{1.2}
+
+\title{Trust Region Policy Optimization - Implementation}
+\author{Pietro Nardelli \\ \\ 
+        Master's Degree in Artificial Intelligence and Robotics \\
+        Department of Computer, Control and Management Engineering \\
+        Sapienza University of Rome}
+
+\date{January 2020}
+
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+Trust Region Policy Optimization is an algorithm that make several
+approximations to a theoretical iterative procedure for optimizing policies with
+guaranteeed monotonic improvement. Despite its approximations that deviate from
+the theory, TRPO tends to give monotonic improvement, while little tuning of
+hyperparameters. This algorithm is effective for optimizing large nonlinear
+policies such as neural networks. The algorithm has been tested on two different
+openAI gym environments. Gym library is a collection of test problems that can
+be used to test reinforcement learning algorithms. 
+
+\section{TRPO algorithm}\label{section-trpo}
+Let $\pi$ denote a stochastic policy and let $\eta(\pi)$ denote its expected discounted reward. The
+advantage function $A_{\pi} = Q_{\pi}(s, a) - V_{\pi}(s)$ is the difference between state-action
+value function and value function. We can prove that any policy update $\pi \rightarrow \tilde{\pi}$
+that has a nonnegative expected advantage at every states is guaranteeed to increase the policy
+performance $\eta$, or leave it constant in the case that the expected advantage is zero everywhere.
+However, in the approximate setting, it will typically be unavoidable, due to estimation and
+approximation error, that there will be some state s for which the expected advantage is negative.
+This is the idea at the base of the policy iteration algorithm that is a type of
+minorization-maximization algorithm. The evolution of this kind of algorithm is called Trust Region
+Policy Optimization (TRPO), which uses a constraint on the Kullback–Leibler (KL) divergence rather than a penalty to
+robustly allow large updates.
+The KL divergence is a measure of how one probability distribution $P$ is different from a second
+probability distribution $Q$ that is a reference for the first one: $D_{KL}(P||Q)$.
+In fact, supposing that we used the penalty coefficient recommended by theory, the step sizes would
+be very small. One way to take larger steps in a robust way is to use a constraint on the KL
+divergence between new policy and old policy (trust region constraint):
+\begin{equation} 
+        \begin{split}
+        maximize_{\theta} \ L_{\theta_{old}}(\theta) 
+        \\ \label{eq:1}
+        subject \  to \ D_{KL_{max}}(\theta_{old}, \theta) \leq \delta
+        \end{split}
+\end{equation}
+
+Knowing that $L$ is a local approximation to $\eta$ and
+$D_{KL}(\theta|| \tilde{\theta}) := D_{KL}(\pi_{\theta}||\pi_{\tilde{\theta}})$ 
+This problem imposes a constrain that the KL divergence is bounded at everyt point in the state
+space. While it's motivated by the theory, this problem is impractical to solve due to large number
+of constraints. Instead, we can used a heuristic approximation which considers the avarage KL
+divergence $\bar{D_{KL}}$.
+Our optimization problem in equation (\ref{eq:1}) is exactly equivalent to the following one, written
+in terms of expectations, replacing some terms:
+\begin{equation} 
+        \begin{split}
+        maximize_{\theta} \ E_t[\frac{\pi_{\theta}(a_t, s_t)}{\pi_{\theta_{old}}(a_t, s_t)}A_t]
+        \\ \label{eq:2}
+        subject \  to \ D_{KL_{max}}(\theta_{old}, \theta) \leq \delta
+        \end{split}
+\end{equation}
+In the trust region, we limit our search within a region controlled by $\delta$. Mathematically, we
+can prove that such region guarantees that its optimal policy will outperform the
+current one until it reaches a local or global optimal.
+
+
+\section{Environments}
+
+\subsection{MountainCarContinuous-v0}
+An underpowered car must climb a one-dimensional hill to reach a target. The
+action (engine force applied) is allowed to be a continuous value.
+The target is on top of a hill on the right-hand side of the car. If the car reaches it or goes beyond, the episode terminates.
+\\
+On the left-hand side, there is another hill. Climbing this hill can be used to
+gain potential energy and accelerate towards the target. On top of this second
+hill, the car cannot go further than a position equal to -1, as if there was a
+wall. Hitting this limit does not generate a penalty.
+\\
+The observations are CarPosition and CarVelocity and the only action permits to
+push the car on the left (negative values) or on the right (negative values).
+\\
+Reward is 100 for reaching the target of the hill on the right hand side, 
+minus the squared sum of actions from start to goal.
+
+This reward function raises an \textbf{exploration challenge}, because if the agent does
+not reach the target soon enough, it will figure out that it is better not to move, 
+and won't find the target anymore.
+\\
+To consider the problem solved, the reward should be over 90.
+
+
+\subsection{LunarLanderContinuous-v0}
+A lunar lander is a spacecraft designed to land on the Moon. Landing pad is always at coordinates
+(0,0). Reward for moving from the top of the screen to landing pad and zero speed is about 100-140
+points. If lander moves away from landing pad it loses reward back. Episode finishes if the lander
+crashes or comes to rest, receiving additional -100 or +100 points. Each leg ground contact is +10.
+Firing main engine is -0.3 points each frame (fuel is infinite). Solved is 200 points. Action is two
+real values vector from -1 to +1. First controls main engine, [-1,0] off, [0,1] throttle from 50\%
+to 100\% power, Second value [-1.0,-0.5] fire left engine, [0.5,1.0] fire right engine, [0.5,0.5]
+off.
+\begin{figure}[h!]
+        \centering
+        \begin{subfigure}[b]{0.4\linewidth}
+                \includegraphics[width=\linewidth]{mountain_screen}
+                \caption{}
+        \end{subfigure}
+        \begin{subfigure}[b]{0.4\linewidth}
+                \includegraphics[width=\linewidth]{lunar_screen}
+                \caption{}
+        \end{subfigure}
+
+\caption{ Both the environments just described. (a) MountainCarContinuous-v0 when reaching the goal position.(b) LunarLanderContinuous-v2 when reaching the landing pad.}
+\label{fig:screens}
+\end{figure}
+
+
+
+\section{Results}
+We should choose delta and alpha carefully to permits to the algorithm to avoid steps too large and decide what e > 10 circa.
+
+
+\end{document}
