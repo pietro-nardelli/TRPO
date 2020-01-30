@@ -22,7 +22,8 @@ class Policy(object):
         self.epochs = 20
         self.trpo = TRPO(obs_dim, act_dim, hid1_size, kl_targ, init_logvar)
         self.policy = self.trpo.get_layer('policy_nn')
-        self.lr = 0.000225
+        self.lr = 0.0005
+        #self.lr = 0.00005
         self.trpo.compile(optimizer=Adam(self.lr))
 
     def LogProb(self, inputs):
@@ -69,7 +70,13 @@ class Policy(object):
                                                       old_means, old_logvars, old_logp])
 
             kl = np.mean(kl)
-            if kl > self.kl_targ:  # early stopping if D_KL diverges badly
+            if e == 0:
+                self.trpo.save_weights(filepath)
+                kl = self.trpo.predict_on_batch([observes, actions, advantages,
+                                                      old_means, old_logvars, old_logp])
+
+            elif kl > self.kl_targ:  # early stopping if D_KL diverges badly
+                print (e)
                 self.trpo.load_weights(filepath)
                 break
             else:

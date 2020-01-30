@@ -13,7 +13,7 @@ from utils import plotLearning
 env_name = 'MountainCarContinuous-v0'   
 #env_name = 'LunarLanderContinuous-v2'   
 
-num_episodes=500
+num_episodes=1000
 gamma = 0.995                   # Discount factor
 kl_targ = 0.005                 # D_KL target value
 batch_size = 5                 # Number of episodes per training batch
@@ -167,10 +167,16 @@ def add_adv(trajectories):
         None (mutates trajectories dictionary to add 'advantages')
     """
     for trajectory in trajectories:
-        rewards = trajectory['rewards']
+        '''
+        if gamma < 0.999:  # don't scale for gamma ~= 1
+            disc_sum_rew = trajectory['disc_sum_rew'] * (1 - gamma)
+        else:
+            disc_sum_rew = trajectory['disc_sum_rew']
+        '''
+        disc_sum_rew = trajectory['disc_sum_rew']
         values = trajectory['values']
 
-        advantages = rewards - values
+        advantages = disc_sum_rew - values
         trajectory['advantages'] = advantages
 
 
@@ -191,7 +197,7 @@ def build_train_set(trajectories):
     actions = np.concatenate([t['actions'] for t in trajectories])
     disc_sum_rew = np.concatenate([t['disc_sum_rew'] for t in trajectories])
     advantages = np.concatenate([t['advantages'] for t in trajectories])
-    # normalize advantages
+    # normalize advantages (standard score), instead of doing mean(disc_sum_rew) - mean(values)
     advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-6)
 
     return observes, actions, advantages, disc_sum_rew
@@ -218,6 +224,7 @@ Args:
 """
 env, obs_dim, act_dim = init_gym(env_name)
 env = gym.make(env_name)
+env.seed(10)
 val_func = NNValueFunction(obs_dim, hid1_size)
 
 policy = Policy(obs_dim, act_dim, kl_targ, hid1_size, init_logvar)

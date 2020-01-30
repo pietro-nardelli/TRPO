@@ -30,7 +30,7 @@ class NNValueFunction(object):
         hid2_units = hid1_units/4 
         hid3_units = 5
 
-        self.lr = 0.005
+        self.lr = 1e-2 / np.sqrt(hid2_units)
         print('Value Params -- h1: {}, h2: {}, h3: {}, lr: {:.3g}'
               .format(hid1_units, hid2_units, hid3_units, self.lr))
         y = Dense(hid1_units, activation='tanh')(obs)
