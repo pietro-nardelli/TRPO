@@ -2,6 +2,7 @@
 \usepackage{amsmath, amssymb, amscd, amsthm, amsfonts}
 \usepackage{graphicx}
 \usepackage{subcaption}
+
 \graphicspath{ {./Images/} }
 \usepackage{hyperref}
 
@@ -16,13 +17,12 @@
 \linespread{1.2}
 
 \title{Trust Region Policy Optimization - Implementation}
-\author{Pietro Nardelli \\ \\ 
+\author{Pietro Nardelli \\ \\
         Master's Degree in Artificial Intelligence and Robotics \\
         Department of Computer, Control and Management Engineering \\
         Sapienza University of Rome}
 
 \date{January 2020}
-
 
 \begin{document}
 
@@ -36,52 +36,7 @@ the theory, TRPO tends to give monotonic improvement, while little tuning of
 hyperparameters. This algorithm is effective for optimizing large nonlinear
 policies such as neural networks. The algorithm has been tested on two different
 openAI gym environments. Gym library is a collection of test problems that can
-be used to test reinforcement learning algorithms. 
-
-\section{TRPO algorithm}\label{section-trpo}
-Let $\pi$ denote a stochastic policy and let $\eta(\pi)$ denote its expected discounted reward. The
-advantage function $A_{\pi} = Q_{\pi}(s, a) - V_{\pi}(s)$ is the difference between state-action
-value function and value function. We can prove that any policy update $\pi \rightarrow \tilde{\pi}$
-that has a nonnegative expected advantage at every states is guaranteeed to increase the policy
-performance $\eta$, or leave it constant in the case that the expected advantage is zero everywhere.
-However, in the approximate setting, it will typically be unavoidable, due to estimation and
-approximation error, that there will be some state s for which the expected advantage is negative.
-This is the idea at the base of the policy iteration algorithm that is a type of
-minorization-maximization algorithm. The evolution of this kind of algorithm is called Trust Region
-Policy Optimization (TRPO), which uses a constraint on the Kullback–Leibler (KL) divergence rather than a penalty to
-robustly allow large updates.
-The KL divergence is a measure of how one probability distribution $P$ is different from a second
-probability distribution $Q$ that is a reference for the first one: $D_{KL}(P||Q)$.
-In fact, supposing that we used the penalty coefficient recommended by theory, the step sizes would
-be very small. One way to take larger steps in a robust way is to use a constraint on the KL
-divergence between new policy and old policy (trust region constraint):
-\begin{equation} 
-        \begin{split}
-        maximize_{\theta} \ L_{\theta_{old}}(\theta) 
-        \\ \label{eq:1}
-        subject \  to \ D_{KL_{max}}(\theta_{old}, \theta) \leq \delta
-        \end{split}
-\end{equation}
-
-Knowing that $L$ is a local approximation to $\eta$ and
-$D_{KL}(\theta|| \tilde{\theta}) := D_{KL}(\pi_{\theta}||\pi_{\tilde{\theta}})$ 
-This problem imposes a constrain that the KL divergence is bounded at everyt point in the state
-space. While it's motivated by the theory, this problem is impractical to solve due to large number
-of constraints. Instead, we can used a heuristic approximation which considers the avarage KL
-divergence $\bar{D_{KL}}$.
-Our optimization problem in equation (\ref{eq:1}) is exactly equivalent to the following one, written
-in terms of expectations, replacing some terms:
-\begin{equation} 
-        \begin{split}
-        maximize_{\theta} \ E_t[\frac{\pi_{\theta}(a_t, s_t)}{\pi_{\theta_{old}}(a_t, s_t)}A_t]
-        \\ \label{eq:2}
-        subject \  to \ D_{KL_{max}}(\theta_{old}, \theta) \leq \delta
-        \end{split}
-\end{equation}
-In the trust region, we limit our search within a region controlled by $\delta$. Mathematically, we
-can prove that such region guarantees that its optimal policy will outperform the
-current one until it reaches a local or global optimal.
-
+be used to test reinforcement learning algorithms.
 
 \section{Environments}
 
@@ -98,11 +53,11 @@ wall. Hitting this limit does not generate a penalty.
 The observations are CarPosition and CarVelocity and the only action permits to
 push the car on the left (negative values) or on the right (negative values).
 \\
-Reward is 100 for reaching the target of the hill on the right hand side, 
+Reward is 100 for reaching the target of the hill on the right hand side,
 minus the squared sum of actions from start to goal.
 
 This reward function raises an \textbf{exploration challenge}, because if the agent does
-not reach the target soon enough, it will figure out that it is better not to move, 
+not reach the target soon enough, it will figure out that it is better not to move,
 and won't find the target anymore.
 \\
 To consider the problem solved, the reward should be over 90.
@@ -128,14 +83,103 @@ off.
                 \caption{}
         \end{subfigure}
 
-\caption{ Both the environments just described. (a) MountainCarContinuous-v0 when reaching the goal position.(b) LunarLanderContinuous-v2 when reaching the landing pad.}
-\label{fig:screens}
+        \caption{ Both the environments just described. (a) MountainCarContinuous-v0 when reaching the goal position.(b) LunarLanderContinuous-v2 when reaching the landing pad.}
+        \label{fig:screens}
 \end{figure}
 
+\section{TRPO algorithm}\label{section-trpo}
+Let $\pi$ denote a stochastic policy and let $\eta(\pi)$ denote its expected discounted reward. The
+advantage function $A_{\pi} = Q_{\pi}(s, a) - V_{\pi}(s)$ is the difference between state-action
+value function and value function. We can prove that any policy update $\pi \rightarrow \tilde{\pi}$
+that has a nonnegative expected advantage at every states is guaranteeed to increase the policy
+performance $\eta$, or leave it constant in the case that the expected advantage is zero everywhere.
+Intuitively, we can think of it as measuring how good the new policy is with regard to the average
+performance of the old policy. However, in the approximate setting, it will typically be
+unavoidable, due to estimation and approximation error, that there will be some state s for which
+the expected advantage is negative. This is the idea at the base of the policy iteration algorithm
+that is a type of minorization-maximization algorithm. The evolution of this kind of algorithm is
+called Trust Region Policy Optimization (TRPO), which uses a constraint on the Kullback–Leibler (KL)
+divergence rather than a penalty to robustly allow large updates. The KL divergence is a measure of
+how one probability distribution $P$ is different from a second probability distribution $Q$ that is
+a reference for the first one: $D_{KL}(P||Q)$.
+
+\begin{figure}[t]
+        \includegraphics[width=15cm]{functions}
+        \centering
+        \caption{In practice, if penalty coefficient is included in the objective function,
+        the step size will be very small, leading to long training time.
+        Consequently, a constraint on the KL divergence is used to allow a larger step size
+        while guarantee robust performance.}
+        \label{fig:functions}
+\end{figure}
+
+In fact, supposing that we used the penalty coefficient C recommended by theory, the step sizes
+would be very small (fig. \ref{fig:functions}). One way to take larger steps in a robust way is to use a constraint
+on the KL divergence between new policy and old policy (trust region constraint):
+\begin{equation}
+        \begin{split}
+        maximize_{\theta} \ L_{\theta_{old}}(\theta)
+        \\ \label{eq:1}
+        subject \  to \ D_{KL_{max}}(\theta_{old}, \theta) \leq \delta
+        \end{split}
+\end{equation}
+
+Since eta is hard to optimized, $L$ is a local approximation to $\eta$. Another
+assumption is that $D_{KL}(\theta|| \tilde{\theta}) :=
+D_{KL}(\pi_{\theta}||\pi_{\tilde{\theta}})$. This problem imposes a constrain that the KL
+divergence is bounded at every point in the state space. While it's motivated by the
+theory, this problem is impractical to solve due to large number of constraints.
+Unfortunately, it is not solvable as there are a infinitely large number of
+states: we can used a heuristic approximation which considers the avarage KL
+divergence $\bar{D_{KL}}$. Our optimization problem in equation (\ref{eq:1}) is exactly
+equivalent to the following one (written in terms of expectations, replacing some terms):
+
+\begin{equation}
+        \begin{split}
+        maximize_{\theta} \ E_t[\frac{\pi_{\theta}(a_t, s_t)}{\pi_{\theta_{old}}(a_t, s_t)}A_t]
+        \\ \label{eq:2}
+        subject \  to \ D_{KL_{max}}(\theta_{old}, \theta) \leq \delta
+        \end{split}
+\end{equation}
+
+The objective function is also called a “surrogate” objective function as it contains a
+probability ratio between current policy and the next policy. The subset of region lies
+within the constraint is called trust region. As long as the policy change is reasonably
+small, the approximation is not much different from the true objective function By
+choosing the new policy parameters which maximizes the expectation subject to the KL
+divergence constraint, a lower bound of the expected long-term reward $\eta$ is guaranteed.
+\\
+In the trust region, we limit our search within a region controlled by $\delta$.
+Mathematically, we can prove that such region guarantees that its optimal policy will
+outperform the current one until it reaches a local or global optimal.
+
+\section{Implementation}
+\begin{figure}[t]
+        \includegraphics[width=9cm]{pseudocode}
+        \centering
+        \caption{Pseudocode for TRPO algorithm.}
+        \label{fig:functions}
+\end{figure}
 
 
 \section{Results}
 We should choose delta and alpha carefully to permits to the algorithm to avoid steps too large and decide what e > 10 circa.
+mountain car:
+$$500 episodes reach the solution (90 score). Env_seed (11), lr 0.0003$$
 
+\begin{figure}[h!]
+        \centering
+        \begin{subfigure}[b]{0.6\linewidth}
+                \includegraphics[width=\linewidth]{mountain_plot}
+                \caption{}
+        \end{subfigure}
+        \begin{subfigure}[b]{0.6\linewidth}
+                \includegraphics[width=\linewidth]{lunar_plot}
+                \caption{}
+        \end{subfigure}
+
+        \caption{ Plot of the rewards obtained for each epoch by the agent. The environments in which the agent operates are (a) MountainCarContinuous-v0 and (b) LunarLanderContinuous-v2.}
+        \label{fig:plots}
+\end{figure}
 
 \end{document}
