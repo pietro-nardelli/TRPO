@@ -9,21 +9,21 @@ import numpy as np
 
 
 class Policy(object):
-    def __init__(self, obs_dim, act_dim, kl_targ, hid1_size, init_logvar):
+    def __init__(self, obs_dim, act_dim, delta, hid1_size, init_logvar):
         """
         Args:
             obs_dim: num observation dimensions (int)
             act_dim: num action dimensions (int)
-            kl_targ: target KL divergence between pi_old and pi_new
+            delta: target KL divergence between pi_old and pi_new
             hid1_size: size of first hidden layer
             init_logvar: natural log of initial policy variance
         """
-        self.kl_targ = kl_targ
+        self.delta = delta
         self.epochs = 20
-        self.trpo = TRPO(obs_dim, act_dim, hid1_size, kl_targ, init_logvar)
+        self.trpo = TRPO(obs_dim, act_dim, hid1_size, delta, init_logvar)
         self.policy = self.trpo.get_layer('policy_nn')
-        self.lr = 0.0005
-        #self.lr = 0.00005
+        #self.lr = 0.0003 #MountainCar OK 
+        self.lr = 0.00005 #LunarLander OK
         self.trpo.compile(optimizer=Adam(self.lr))
 
     def LogProb(self, inputs):
@@ -63,34 +63,38 @@ class Policy(object):
         
         filepath = "keras-weights.h5"
         for e in range(self.epochs):
+            #Runs a single gradient update on a single batch of data.
             loss = self.trpo.train_on_batch([observes, actions, advantages,
                                              old_means, old_logvars, old_logp])
 
             kl = self.trpo.predict_on_batch([observes, actions, advantages,
                                                       old_means, old_logvars, old_logp])
 
+
             kl = np.mean(kl)
+
             if e == 0:
                 self.trpo.save_weights(filepath)
-                kl = self.trpo.predict_on_batch([observes, actions, advantages,
-                                                      old_means, old_logvars, old_logp])
+                
 
-            elif kl > self.kl_targ:  # early stopping if D_KL diverges badly
-                print (e)
+            elif kl > self.delta:  # early stopping if D_KL diverges badly
+                print ("Epochs: "+str(e))
                 self.trpo.load_weights(filepath)
                 break
             else:
                 self.trpo.save_weights(filepath)
-                kl = self.trpo.predict_on_batch([observes, actions, advantages,
-                                                      old_means, old_logvars, old_logp])
-        
-# Neural network that is used to calculate the policy approximation returning means and logvar
+            
+
+
+
+
+# This layer (but is the entire NN) is used to calculate the policy approximation
+# returning means and logvar
 class PolicyNN(Layer):
     """ Neural net for policy approximation function.
 
     Policy parameterized by Gaussian means and variances. NN outputs mean
-     action based on observation. Trainable variables hold log-variances
-     for each action dimension (i.e. variances not determined by NN).
+     action based on observation. 
     """
     def __init__(self, obs_dim, act_dim, hid1_size, init_logvar, **kwargs):
         super(PolicyNN, self).__init__(**kwargs)
@@ -98,15 +102,15 @@ class PolicyNN(Layer):
         hid1_units = hid1_size * obs_dim
         hid2_units = hid1_units/2  
         hid3_units = act_dim
-        self.lr = 0.000225  
         self.init_logvar = init_logvar
         
         #Dense1,...,4 created because otherwise the computation was been too slow
         self.dense1 = Dense(hid1_units, activation='tanh')
         self.dense2 = Dense(hid2_units, activation='tanh')
         self.dense3 = Dense(hid3_units, activation='tanh')
-        self.dense4 = Dense(act_dim)        
+        self.dense4 = Dense(act_dim)   
 
+        # Create a trainable weight variable for this layer.
         self.logvars = self.add_weight(shape=(1,act_dim),
                                        trainable=True, initializer='zeros')
     def build(self, input_shape):
@@ -116,23 +120,22 @@ class PolicyNN(Layer):
         y = self.dense1(inputs)
         y = self.dense2(y)
         y = self.dense3(y)
-        means = self.dense4(y)
+        means = self.dense4(y)      # The output of the layer
 
+        # Logvars is (like) another output of this layer
         logvars = self.logvars + self.init_logvar
         return [means, logvars]
 
 #This is a class that permits us to compile the previous NN with a custom loss and compute KL
 #In Keras API it can be a Model so we can call the policyNN easily and fast
 class TRPO(Model):
-    def __init__(self, obs_dim, act_dim, hid1_size, kl_targ, init_logvar, **kwargs):
+    def __init__(self, obs_dim, act_dim, hid1_size, delta, init_logvar, **kwargs):
         super(TRPO, self).__init__(**kwargs)
-        self.kl_targ = kl_targ
+        self.delta = delta
         self.policy = PolicyNN(obs_dim, act_dim, hid1_size, init_logvar)
         self.act_dim = act_dim
 
     def call(self, inputs):
-        obs, act, adv, old_means, old_logvars, old_logp = inputs
-        new_means, new_logvars = self.policy(obs)
 
         def LogProb(inputs):
             """Calculates log probabilities of a batch of actions."""
@@ -144,7 +147,7 @@ class TRPO(Model):
 
         def KLDiv(inputs):
             """
-            Layer calculates KL divergence between old and new distributions
+            KL divergence between old and new distributions
 
             https://en.wikipedia.org/wiki/Multivariate_normal_distribution#Kullback.E2.80.93Leibler_divergence
             """
@@ -159,7 +162,8 @@ class TRPO(Model):
                         np.float64(self.act_dim))
             return kl
 
-
+        obs, act, adv, old_means, old_logvars, old_logp = inputs
+        new_means, new_logvars = self.policy(obs)
 
         new_logp = LogProb([act, new_means, new_logvars])
         kl = KLDiv([old_means, old_logvars,

@@ -10,16 +10,16 @@ from value import NNValueFunction
 import scipy.signal
 from utils import plotLearning
 
-env_name = 'MountainCarContinuous-v0'   
-#env_name = 'LunarLanderContinuous-v2'   
+#env_name = 'MountainCarContinuous-v0'   
+env_name = 'LunarLanderContinuous-v2'   
 
-num_episodes=1000
-gamma = 0.995                   # Discount factor
-kl_targ = 0.005                 # D_KL target value
-batch_size = 5                 # Number of episodes per training batch
-hid1_size = 32                  # Size of the first hidden layer for value and policy NNs
-eps = 0.2
-init_logvar = -1.0              # Initial policy natural log of variance
+num_episodes=5000
+gamma = 0.995                 # Discount factor
+delta = 0.005                 # D_KL target value
+batch_size = 5                # Number of episodes per training batch
+hid1_size = 32                # Size of the first hidden layer for value and policy NNs
+eps = 0.2                     # Epsilon: parameter for eps-greedy choice of action
+init_logvar = -1              # Initial policy natural log of variance
 
 
 def init_gym(env_name):
@@ -74,7 +74,7 @@ def run_episode(env, policy, eps, animate=False):
         obs, reward, done, _ = env.step(action.flatten())
         rewards.append(reward)
         totalReward += reward
-        
+    print ("Reward: "+str(totalReward))   
     return (np.concatenate(observes), np.concatenate(actions),
             np.array(rewards, dtype=np.float32), totalReward)
 
@@ -167,12 +167,6 @@ def add_adv(trajectories):
         None (mutates trajectories dictionary to add 'advantages')
     """
     for trajectory in trajectories:
-        '''
-        if gamma < 0.999:  # don't scale for gamma ~= 1
-            disc_sum_rew = trajectory['disc_sum_rew'] * (1 - gamma)
-        else:
-            disc_sum_rew = trajectory['disc_sum_rew']
-        '''
         disc_sum_rew = trajectory['disc_sum_rew']
         values = trajectory['values']
 
@@ -217,30 +211,30 @@ Args:
     num_episodes: maximum number of episodes to run
     gamma: reward discount factor (float)
     lam: lambda from Generalized Advantage Estimate
-    kl_targ: D_KL target for policy update [D_KL(pi_old || pi_new)
+    delta: D_KL target for policy update [D_KL(pi_old || pi_new)
     batch_size: number of episodes per policy training batch
     hid1_size: hid1 size for policy and value_f
     init_logvar: natural log of initial policy variance
 """
 env, obs_dim, act_dim = init_gym(env_name)
 env = gym.make(env_name)
-env.seed(10)
+env.seed(11)
 val_func = NNValueFunction(obs_dim, hid1_size)
 
-policy = Policy(obs_dim, act_dim, kl_targ, hid1_size, init_logvar)
+policy = Policy(obs_dim, act_dim, delta, hid1_size, init_logvar)
 
 episode = 0
 n_batch = 0
 reward_history = []
 while episode < num_episodes:
-    trajectories = run_policy(env, policy, episodes=5)
+    trajectories = run_policy(env, policy, episodes=batch_size)
 
     add_value(trajectories, val_func)  # add estimated values to episodes
     add_disc_sum_rew(trajectories, gamma)  # calculated discounted sum of Rs
     add_adv(trajectories)  # calculate advantage
     # concatenate all episodes into single NumPy arrays
     observes, actions, advantages, disc_sum_rew = build_train_set(trajectories)
-    
+
     policy.update(observes, actions, advantages)  # update policy
     val_func.fit(observes, disc_sum_rew)  # update value function
 
@@ -251,7 +245,7 @@ while episode < num_episodes:
     n_batch += 1
     
     print ("Batch: "+str(n_batch)+" Reward avg: "+str(avg_batch_rewards(trajectories)))
-
+    print ("________________________________")
     #plot the reward history
     filename = env_name+' plot_rewards.png'
     

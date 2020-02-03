@@ -3,7 +3,7 @@ import numpy as np
 
 def plotLearning(scores, filename, x=None, window=5):   
     N = len(scores)
-    
+
     running_avg = np.empty(N)
     for t in range(N):
 	    running_avg[t] = np.mean(scores[max(0, t-window):(t+1)])
@@ -13,7 +13,9 @@ def plotLearning(scores, filename, x=None, window=5):
     plt.ylabel('Reward')       
     plt.xlabel('Episodes')
 
-    plt.plot(x, running_avg, 'c-')
+    plt.plot(x, running_avg, 'b-')
+    plt.scatter(x, scores, 0.5)
+    plt.ylim(bottom=min(scores), top=max(scores))
     #plt.plot(x, scores, 'c-', alpha=0)
     plt.plot()
     plt.savefig(filename)
