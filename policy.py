@@ -5,6 +5,7 @@ import tensorflow.keras.backend as K
 from tensorflow.keras import Model
 from tensorflow.keras.layers import Dense, Layer
 from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.models import save_model
 import numpy as np
 
 
@@ -25,6 +26,9 @@ class Policy(object):
         #self.lr = 0.0003 #MountainCar OK 
         self.lr = 0.00005 #LunarLander OK
         self.trpo.compile(optimizer=Adam(self.lr))
+    
+    def load_test(self, filepath):
+        self.trpo.load_weights(filepath)
 
     def LogProb(self, inputs):
         """Calculates log probabilities of a batch of actions."""
@@ -62,6 +66,7 @@ class Policy(object):
         loss, kl = 0, 0
         
         filepath = "keras-weights.h5"
+
         for e in range(self.epochs):
             #Runs a single gradient update on a single batch of data.
             loss = self.trpo.train_on_batch([observes, actions, advantages,
@@ -83,7 +88,9 @@ class Policy(object):
                 break
             else:
                 self.trpo.save_weights(filepath)
-            
+        
+        self.trpo.save_weights('test.tf')
+
 
 
 
@@ -111,7 +118,7 @@ class PolicyNN(Layer):
         self.dense4 = Dense(act_dim)   
 
         # Create a trainable weight variable for this layer.
-        self.logvars = self.add_weight(shape=(1,act_dim),
+        self.logvars = self.add_weight(name='w', shape=(1,act_dim),
                                        trainable=True, initializer='zeros')
     def build(self, input_shape):
         self.batch_sz = input_shape[0]
@@ -136,6 +143,7 @@ class TRPO(Model):
         self.act_dim = act_dim
 
     def call(self, inputs):
+
 
         def LogProb(inputs):
             """Calculates log probabilities of a batch of actions."""
@@ -171,5 +179,7 @@ class TRPO(Model):
 
         loss = -K.mean(adv * K.exp(new_logp - old_logp))
         self.add_loss(loss) #Compile with a custom loss
+
+
 
         return kl #Return KL
