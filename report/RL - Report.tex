@@ -2,6 +2,7 @@
 \usepackage{amsmath, amssymb, amscd, amsthm, amsfonts}
 \usepackage{graphicx}
 \usepackage{subcaption}
+\usepackage{wrapfig}
 
 \graphicspath{ {./Images/} }
 \usepackage{hyperref}
@@ -97,25 +98,41 @@ Intuitively, we can think of it as measuring how good the new policy is with reg
 performance of the old policy. However, in the approximate setting, it will typically be
 unavoidable, due to estimation and approximation error, that there will be some state s for which
 the expected advantage is negative. This is the idea at the base of the policy iteration algorithm
-that is a type of minorization-maximization algorithm. The evolution of this kind of algorithm is
-called Trust Region Policy Optimization (TRPO), which uses a constraint on the Kullback–Leibler (KL)
-divergence rather than a penalty to robustly allow large updates. The KL divergence is a measure of
-how one probability distribution $P$ is different from a second probability distribution $Q$ that is
-a reference for the first one: $D_{KL}(P||Q)$.
+that is a type of minorization-maximization (MM) algorithm. 
+The MM algorithm can guarantee that any policy updates always improve the expected
+rewards. It's achived iteratively by maximizing a lower bound function approximating the
+expected reward locally, as we can see in figure \ref{fig:functions1}
+\begin{figure}[t]
+        \includegraphics[width=15cm]{functions1}
+        \centering
+        \caption{Minorization-Maximization algorithm where M is a lower bound for $\eta$.
+                Eventually our guess will converge to the optimal policy but to make this
+                work $M$ should be easier to optimize than $\eta$ (in fact M is usually a
+                quadratic equation that is a convex function, a function well studied on
+                how to optimize it). }
+        \label{fig:functions1}
+\end{figure}
+
+The evolution of this kind of algorithm is called Trust Region Policy Optimization (TRPO),
+which uses a constraint on the Kullback–Leibler (KL) divergence rather than a penalty to
+robustly allow large updates. The KL divergence is a measure of how one probability
+distribution $P$ is different from a second probability distribution $Q$ that is a
+reference for the first one: $D_{KL}(P||Q)$.
 
 \begin{figure}[t]
-        \includegraphics[width=15cm]{functions}
+        \includegraphics[width=15cm]{functions2}
         \centering
         \caption{In practice, if penalty coefficient is included in the objective function,
         the step size will be very small, leading to long training time.
         Consequently, a constraint on the KL divergence is used to allow a larger step size
-        while guarantee robust performance.}
-        \label{fig:functions}
+        while guarantee robust performance.
+        }
+        \label{fig:functions2}
 \end{figure}
-
-In fact, supposing that we used the penalty coefficient C recommended by theory, the step sizes
-would be very small (fig. \ref{fig:functions}). One way to take larger steps in a robust way is to use a constraint
-on the KL divergence between new policy and old policy (trust region constraint):
+In fact, supposing that we used a penalty coefficient C (that is recommended by theory),
+the step sizes would be very small (fig. \ref{fig:functions2}). One way to take larger
+steps in a robust way is to use a constraint on the KL divergence between new policy and
+old policy (trust region constraint):
 \begin{equation}
         \begin{split}
         maximize_{\theta} \ L_{\theta_{old}}(\theta)
@@ -124,7 +141,7 @@ on the KL divergence between new policy and old policy (trust region constraint)
         \end{split}
 \end{equation}
 
-Since eta is hard to optimized, $L$ is a local approximation to $\eta$. Another
+Since $eta$ is hard to optimized, $L$ is a local approximation to $\eta$. Another
 assumption is that $D_{KL}(\theta|| \tilde{\theta}) :=
 D_{KL}(\pi_{\theta}||\pi_{\tilde{\theta}})$. This problem imposes a constrain that the KL
 divergence is bounded at every point in the state space. While it's motivated by the
@@ -182,22 +199,56 @@ handcrafted solution which uses gradient descent, even if it is not the most eff
 solution (fig. \ref{fig:gradient}), as we will see in the next section.
 
 
+
 \section{Implementation}
-
-
-\begin{figure}[t]
-        \includegraphics[width=9cm]{gradient}
+\begin{wrapfigure}{r}{0.5\textwidth}
+        \includegraphics[width=0.4\textwidth]{gradient}
         \centering
         \caption{Difference between conjugate gradient (red line) and gradient descent
-        (white line). As we can see che conjugate gradient can reach the minimum point of
+        (white line). Conjugate gradient can reach the minimum point of
         the function in less steps.}
         \label{fig:gradient}
-\end{figure}
-
-
+\end{wrapfigure}
+The algorithm as described in figure \ref{fig:pseudocode} has been developed using Python
+3 and TensorFlow 2 as framework.
 
 It has been used the single-path method in which a set of trajectories is generated via
 simulation of the policy from $s_0$ for some number of timesteps.
+\\
+The advantage requires the value function that is approximated through a neural network.
+The inputs of this neural network are the observations and the estimation has been made
+with Mean Squared Error (MSE). Another fundamental neural network that has to be
+implemented is the policy. Given a particular observation the policy neural network will
+returns the means and log variance, composing a Gaussian distribution from which we can
+sample the right action to choose. Anyway, to permits to the agent to make exploration (as
+well as exploitation) $\epsilon$-greedy method has been implemented: the action to choose
+at each state can be random with a probability $\epsilon=0.2$ 
+\\
+The policy network has been optimized with gradient descent on a loss function that is the negate of
+our objective function from the equation (\ref{eq:2}). For each iteration, the policy has
+to be trained (updated) for $nEpochs$ and for each epoch it's necessary to check if
+$D_{KL} \leq \delta$. If this condition is not respected, then the constraint is not
+either: the previous state of the neural network would be loaded in order to respect the
+contraint. As we said in the previous paragraph, this handcrafted method has been made to
+find a trade-off between complexity and efficiency of the TRPO algorithm. \\
+Altough theorically the constraint is respected, given the approximation of the value
+function, it's not possible to obtain a positive advantage everytime. For this reason, as
+we will see in the plots in the next paragraph, the policy will have monotonic improvement
+overall only.
+\\
+The training of the policy has to be done each time over all the trajectories of a batch.
+The batch size $bs$ has been set to 5 for memory reason.
+Among the most important implementation choices, besides those already mentioned, there are:
+\begin{itemize}
+        \item Discount factor $\gamma$: is a value between 0 and 1 that tells how
+        important future rewards are to the current state. This is set to 0.995.
+        \item D-KL target value $\delta$: this is the upper value of the constraint.
+        \item Policy learning rate $lr$: this is the learning rate of the policy neural
+        network. This has to be chose carefully otherwise the convergence would never be
+        obtained (the constraint never respected). Empirically we can chose this
+        value as the one that allow the policy to train for at least (on avarage) 10 epochs.
+\end{itemize}
+
 
 \begin{figure}[t]
         \includegraphics[width=9cm]{pseudocode}
@@ -206,61 +257,25 @@ simulation of the policy from $s_0$ for some number of timesteps.
         \label{fig:pseudocode}
 \end{figure}
 
-The value function is approximated through a neural network. This value function
-approximation has to be done so we can calculate the advantage. The value function NN has
-been fitted with X equals to observations and Y equals to discounted sum rewards (so we
-can minimize the difference between pedicted vs true value with a MSE). The disc sum
-rewards has been calculated from every state to the last one of each trajectory. The advantage is
-needed to calculate the loss function for the Policy NN and to train the NN itself. The
-policy NN has the aim to return also the sample of the next action to take from a
-particular observation. Policy NN has been trained with a multi input for tot epochs and
-the train would go until KDL < delta. In that case, the NN backtrack to a previous setting
-(weights loading) so the contraint has been respected (substituing the line search from
-the original paper). Altough theorically the constraint is respected, given the
-approximation of the value function it's not possible to obtain a positive advantage
-everytime. For this reason, as we will se in the plots in the next paragraph, the policy
-will have monotonic improvement only in the general picture (some descreases could
-happen). The conjugate gradient algorithm even if more efficient has not been used because
-it wasn't possible to implement in a simple way. For this reason instead of it a gradient
-ascent on the loss policy has been used (adam). So at the end of each episode batch
-there's this policy update and value function fit so our neural networks are everytime
-updated. The total train set (collection of all the trajectories) has been updated too.
-The batch size is really low to do not saturate the RAM of my computer.
-
-The input of the POLICYNN is observation and the output are means and logvars.
-When we compute the loss we will return also the KL divergency (it's not the real output
-of the NN).
-
-Each update should use "predict" so we can compute the KL (and the loss, in particular).
-The update is made over tot epochs and when KL diverges from delta, stop and backtrack to
-the previous state of the neural network.
-
-\begin{itemize}
-        \item Discount factor $\gamma$:
-        \item D-KL target value $\delta$
-        \item Batch size $bs$
-        \item Hidden layer 1 size $h1s$
-        \item Epsilon-greedy $\epsilon$
-        \item Initial log variance $iLogVar$
-        \item Policy learning rate $Plr$
-        \item Policy epochs $PVe$
-        \item Function value learning rate $FVlr$
-        \item Function value epochs $FVe$
-        \item 
-\end{itemize}
-
-
-
 \section{Results}
 The results has been obtained training the agent for a sufficient quantity of episodes.
-Before taking the right results, various tests have been made changing the parameters of
+All the previous results for the most important parameters are valid in both the
+environment.
+\\
+Before taking the right results, various tests have been made, tuning the parameters of
 the algorithm.
 
-
-       
-We should choose delta and alpha carefully to permits to the algorithm to avoid steps too
-large and decide what e > 10 circa. mountain car:
-$$500 episodes reach the solution (90 score). Env_seed (11), lr 0.0003$$
+For the mountain car environment is necessary to use $lr = 3 \cdot 10^{-4}$. This permits
+to solve the problem (90 score) in about 500 episodes. As we can see in fig
+\ref{fig:plots}a the agent for at least 200 episodes is training its policy to increase
+rewards but without the exploration provided with $\epsilon$-greedy parameter, it wouldn't
+be easy to reach the flag. After its positive reward, the agent obtain an exponentially
+increase in rewards until it's proximate to solve the problem. 
+\\
+For the lunar lander environment a slight improvement is possible with $lr = 5 \cdot
+10^{-5}$. As we can see in \ref{fig:plots}b, the agent will increase generally its
+performance but it will never reaches the goal of the problem. 
+Further improvements can be done to this problem, tuning other parameters in addition to $lr$.
 
 \begin{figure}[h!]
         \centering
