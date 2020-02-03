@@ -32,7 +32,7 @@
 \section{Introduction}
 Trust Region Policy Optimization is an algorithm that make several
 approximations to a theoretical iterative procedure for optimizing policies with
-guaranteeed monotonic improvement. Despite its approximations that deviate from
+guaranteed monotonic improvement. Despite its approximations that deviate from
 the theory, TRPO tends to give monotonic improvement, while little tuning of
 hyperparameters. This algorithm is effective for optimizing large nonlinear
 policies such as neural networks. The algorithm has been tested on two different
@@ -89,27 +89,21 @@ off.
 \end{figure}
 
 \section{TRPO algorithm}\label{section-trpo}
-Let $\pi$ denote a stochastic policy and let $\eta(\pi)$ denote its expected discounted reward. The
-advantage function $A_{\pi} = Q_{\pi}(s, a) - V_{\pi}(s)$ is the difference between state-action
-value function and value function. We can prove that any policy update $\pi \rightarrow \tilde{\pi}$
-that has a nonnegative expected advantage at every states is guaranteeed to increase the policy
-performance $\eta$, or leave it constant in the case that the expected advantage is zero everywhere.
-Intuitively, we can think of it as measuring how good the new policy is with regard to the average
-performance of the old policy. However, in the approximate setting, it will typically be
-unavoidable, due to estimation and approximation error, that there will be some state s for which
-the expected advantage is negative. This is the idea at the base of the policy iteration algorithm
-that is a type of minorization-maximization (MM) algorithm. 
-The MM algorithm can guarantee that any policy updates always improve the expected
-rewards. It's achived iteratively by maximizing a lower bound function approximating the
-expected reward locally, as we can see in figure \ref{fig:functions1}
+TRPO Trust Region Policy Optimization is based on the Minorize-Maximization (MM)
+algorithm. The MM algorithm can guarantee that any policy updates always improve the
+expected rewards. This is achived iteratively by maximizing a lower bound function
+approximating the expected reward locally, as we can see in figure \ref{fig:functions1},
+(with $\pi$ denote a stochastic policy and $\eta(\pi)$ denote its expected discounted
+reward). After each iteration of the MM algorithm the policy keeps improving. Since there
+is only finite possible policy, our current policy will eventually converge to the local
+or the global optimal.
 \begin{figure}[t]
         \includegraphics[width=15cm]{functions1}
         \centering
-        \caption{Minorization-Maximization algorithm where M is a lower bound for $\eta$.
-                Eventually our guess will converge to the optimal policy but to make this
-                work $M$ should be easier to optimize than $\eta$ (in fact M is usually a
-                quadratic equation that is a convex function, a function well studied on
-                how to optimize it). }
+        \caption{Minorization-Maximization algorithm where M is a lower bound for $\eta$
+        (surrogate function). Eventually our guess will converge to the optimal policy but
+        to make this work $M$ should be easier to optimize than $\eta$ (in fact M is
+        usually approximating to a quadratic equation that is a convex function). }
         \label{fig:functions1}
 \end{figure}
 
@@ -140,35 +134,38 @@ old policy (trust region constraint):
         subject \  to \ D_{KL_{max}}(\theta_{old}, \theta) \leq \delta
         \end{split}
 \end{equation}
-
-Since $eta$ is hard to optimized, $L$ is a local approximation to $\eta$. Another
-assumption is that $D_{KL}(\theta|| \tilde{\theta}) :=
-D_{KL}(\pi_{\theta}||\pi_{\tilde{\theta}})$. This problem imposes a constrain that the KL
-divergence is bounded at every point in the state space. While it's motivated by the
-theory, this problem is impractical to solve due to large number of constraints.
-Unfortunately, it is not solvable as there are a infinitely large number of
-states: we can used a heuristic approximation which considers the avarage KL
-divergence $\bar{D_{KL}}$. Our optimization problem in equation (\ref{eq:1}) is exactly
-equivalent to the following one (written in terms of expectations, replacing some terms):
+Since $\eta$ is hard to optimized, $L$ is a local approximation to $\eta$. While it's
+motivated by the theory, this problem is impractical to solve due to large number of
+constraints. Unfortunately, it is not solvable as there are a infinitely large number of
+states: we can use a heuristic approximation which considers the avarage KL divergence
+$\bar{D_{KL}}$. Our optimization problem in equation (\ref{eq:1}) is exactly equivalent to
+the following one (written in terms of expectations, replacing some terms, under the
+assumption that $D_{KL}(\theta|| \tilde{\theta}) :=
+D_{KL}(\pi_{\theta}||\pi_{\tilde{\theta}})$):
 
 \begin{equation}
         \begin{split}
-        maximize_{\theta} \ E_t[\frac{\pi_{\theta}(a_t, s_t)}{\pi_{\theta_{old}}(a_t, s_t)}A_t]
+        maximize_{\theta} \ E_t\Big[\frac{\pi_{\theta}(a_t, s_t)}{\pi_{\theta_{old}}(a_t, s_t)}A_t\Big]
         \\ \label{eq:2}
         subject \  to \ D_{KL_{max}}(\theta_{old}, \theta) \leq \delta
         \end{split}
 \end{equation}
-
-The objective function is also called a “surrogate” objective function as it contains a
+The advantage function $A_{\pi} = Q_{\pi}(s, a) - V_{\pi}(s)$ is the difference between
+state-action value function and value function. We can prove that any policy update $\pi
+\rightarrow \tilde{\pi}$ that has a nonnegative expected advantage at every states is
+guaranteeed to increase the policy performance $\eta$, or leave it constant in the case
+that the expected advantage is zero everywhere. Intuitively, we can think of it as
+measuring how good the new policy is with regard to the average performance of the old
+policy. However, in the approximate setting, it will typically be unavoidable, due to
+estimation and approximation error, that there will be some state s for which the expected
+advantage is negative.
+The objective function is also called a \textbf{surrogate objective function} as it contains a
 probability ratio between current policy and the next policy. The subset of region lies
-within the constraint is called trust region. As long as the policy change is reasonably
+within the constraint is called \textbf{trust region}. As long as the policy change is reasonably
 small, the approximation is not much different from the true objective function By
 choosing the new policy parameters which maximizes the expectation subject to the KL
 divergence constraint, a lower bound of the expected long-term reward $\eta$ is guaranteed.
-\\
 In the trust region, we limit our search within a region controlled by $\delta$.
-Mathematically, we can prove that such region guarantees that its optimal policy will
-outperform the current one until it reaches a local or global optimal.
 \\
 A practical algorithm could be:
 
@@ -180,27 +177,32 @@ A practical algorithm could be:
         policy's parameter vector $\theta$.
 
 \end{enumerate}
-The third point has been done by the author with a conjugate gradient algorithm followed
+The third point has been developed by the author with a conjugate gradient algorithm followed
 by a line search, or in other words, compute a search direction and perform a line search
-in that direction.
-The search direction is computed by approximately solve the equation $Ax = g$ where $A$ is
-the Fisher information matrix (part of the KL divergence). Given that this matrix is
-costly in large-scale problems, the conjugate gradient allows us to approximately solve
-this equation without forming the matrix itself.
-Having computed the search direction, it's necessary to compute the maximal step lenght
-such that the constraint is satisfied.
-Then, the line search has been used to ensure improvement of the surrogate objective and
-satisfaction of the KL divergence constraint.
+in that direction. The search direction is computed by approximately solve the equation
+$Ax = g$ where $A$ is the Fisher information matrix (part of the KL divergence). Given
+that this matrix is costly in large-scale problems, the conjugate gradient allows us to
+approximately solve this equation without forming the matrix itself. Having computed the
+search direction, it's necessary to use a line search to ensure
+improvement of the surrogate objective and satisfaction of the KL divergence constraint.
 \\
+The real difference between gradient descent and conjugate gradient is that the
+latter finds a search direction every time that is A-orthogonal (conjugate) to all previous
+directions, so it would not undo part of the movement done previously (as we can see in fig. \ref{fig:gradient}).
 As far as the author specifies that this is an efficient method to solve the problem, it's
 really hard to implement practically. Given this difficulties in the implementation, I've
 decided to solve the constraint optimization problem (eq. \ref{eq:2}), using an
 handcrafted solution which uses gradient descent, even if it is not the most efficient
-solution (fig. \ref{fig:gradient}), as we will see in the next section.
-
-
-
+solution. 
+The next section will explain the implementation choices for the algorithm.
 \section{Implementation}
+The algorithm as described in figure \ref{fig:pseudocode} has been developed using Python
+3 and TensorFlow 2 as framework.
+
+It has been used the single-path method in which a set of trajectories is generated via
+simulation of the policy from $s_0$ for some number of timesteps.
+
+
 \begin{wrapfigure}{r}{0.5\textwidth}
         \includegraphics[width=0.4\textwidth]{gradient}
         \centering
@@ -209,12 +211,6 @@ solution (fig. \ref{fig:gradient}), as we will see in the next section.
         the function in less steps.}
         \label{fig:gradient}
 \end{wrapfigure}
-The algorithm as described in figure \ref{fig:pseudocode} has been developed using Python
-3 and TensorFlow 2 as framework.
-
-It has been used the single-path method in which a set of trajectories is generated via
-simulation of the policy from $s_0$ for some number of timesteps.
-\\
 The advantage requires the value function that is approximated through a neural network.
 The inputs of this neural network are the observations and the estimation has been made
 with Mean Squared Error (MSE). Another fundamental neural network that has to be
@@ -222,15 +218,15 @@ implemented is the policy. Given a particular observation the policy neural netw
 returns the means and log variance, composing a Gaussian distribution from which we can
 sample the right action to choose. Anyway, to permits to the agent to make exploration (as
 well as exploitation) $\epsilon$-greedy method has been implemented: the action to choose
-at each state can be random with a probability $\epsilon=0.2$ 
+at each state can be randomly selected with a probability $\epsilon=0.2$ 
 \\
 The policy network has been optimized with gradient descent on a loss function that is the negate of
 our objective function from the equation (\ref{eq:2}). For each iteration, the policy has
-to be trained (updated) for $nEpochs$ and for each epoch it's necessary to check if
+to be trained (updated) for several epochs and for each epoch it's necessary to check if
 $D_{KL} \leq \delta$. If this condition is not respected, then the constraint is not
-either: the previous state of the neural network would be loaded in order to respect the
-contraint. As we said in the previous paragraph, this handcrafted method has been made to
-find a trade-off between complexity and efficiency of the TRPO algorithm. \\
+either: the previous state (weights) of the neural network would be loaded in order to respect the
+contraint. As we said in the previous section, this handcrafted method has been made to
+find a trade-off between complexity and efficiency for the TRPO algorithm. \\
 Altough theorically the constraint is respected, given the approximation of the value
 function, it's not possible to obtain a positive advantage everytime. For this reason, as
 we will see in the plots in the next paragraph, the policy will have monotonic improvement
@@ -244,9 +240,9 @@ Among the most important implementation choices, besides those already mentioned
         important future rewards are to the current state. This is set to 0.995.
         \item D-KL target value $\delta$: this is the upper value of the constraint.
         \item Policy learning rate $lr$: this is the learning rate of the policy neural
-        network. This has to be chose carefully otherwise the convergence would never be
-        obtained (the constraint never respected). Empirically we can chose this
-        value as the one that allow the policy to train for at least (on avarage) 10 epochs.
+        network. This has to be chosen carefully otherwise the convergence would never be
+        obtained. Empirically we can chose this value as the one that allow the policy to
+        train for at least (on avarage) 10 epochs.
 \end{itemize}
 
 
@@ -258,37 +254,44 @@ Among the most important implementation choices, besides those already mentioned
 \end{figure}
 
 \section{Results}
-The results has been obtained training the agent for a sufficient quantity of episodes.
-All the previous results for the most important parameters are valid in both the
-environment.
-\\
-Before taking the right results, various tests have been made, tuning the parameters of
-the algorithm.
-
+Various tests have been made, tuning the parameters of the algorithm. All the previous
+results for the most important parameters are valid in both the environment. Subsequent to
+the completion of tuning, the results have been obtained training each agent for a
+sufficient quantity of episodes. 
+\subsection{MountainCarContinuous-v0}
 For the mountain car environment is necessary to use $lr = 3 \cdot 10^{-4}$. This permits
 to solve the problem (90 score) in about 500 episodes. As we can see in fig
 \ref{fig:plots}a the agent for at least 200 episodes is training its policy to increase
 rewards but without the exploration provided with $\epsilon$-greedy parameter, it wouldn't
 be easy to reach the flag. After its positive reward, the agent obtain an exponentially
-increase in rewards until it's proximate to solve the problem. 
-\\
-For the lunar lander environment a slight improvement is possible with $lr = 5 \cdot
-10^{-5}$. As we can see in \ref{fig:plots}b, the agent will increase generally its
-performance but it will never reaches the goal of the problem. 
-Further improvements can be done to this problem, tuning other parameters in addition to $lr$.
+increase in rewards until it's near to solve the problem. 
+It's possible to test this agent on its environment with the saved model in
+\textit{"models/mountain.tf"} using the script \textit{test.py}.
+\subsection{LunarLanderContinuous-v2}
+For the lunar lander environment an improvement is possible with $lr = 5 \cdot 10^{-5}$ while
+keeping all the parameters set for the previous environment. As we can see in
+\ref{fig:plots}b, the agent will increase generally its performance but it requires more
+than double of the episodes to reach a good behaviour, respect to mountain car environment. Further improvements
+can be probably done to this problem tuning other parameters in addition to $lr$. It's possible to
+test this agent on its environment with the saved model in \textit{"models/lunar.tf"}
+using the script \textit{test.py}.
 
 \begin{figure}[h!]
         \centering
-        \begin{subfigure}[b]{0.6\linewidth}
+        \begin{subfigure}[b]{0.7\linewidth}
                 \includegraphics[width=\linewidth]{mountain_plot}
                 \caption{}
         \end{subfigure}
-        \begin{subfigure}[b]{0.6\linewidth}
+        \begin{subfigure}[b]{0.7\linewidth}
                 \includegraphics[width=\linewidth]{lunar_plot}
                 \caption{}
         \end{subfigure}
 
-        \caption{ Plot of the rewards obtained for each epoch by the agent. The environments in which the agent operates are (a) MountainCarContinuous-v0 and (b) LunarLanderContinuous-v2.}
+        \caption{ Learning curves avaraged across five runs. 
+                The environments in which the agent operates are 
+                (a) MountainCarContinuous-v0 and (b) LunarLanderContinuous-v2.
+                In the last environment it has been showed (as a scatter plot) the score
+                for each episode}
         \label{fig:plots}
 \end{figure}
 
