@@ -24,15 +24,13 @@ class NNValueFunction(object):
         self.model = self._build_model()
 
     def _build_model(self):
-        """ Construct TensorFlow graph, including loss function, init op and train op """
+        """ Construct NN, including loss function and optimizer"""
         obs = Input(shape=(self.obs_dim,), dtype='float32')
         hid1_units = self.obs_dim * self.hid1
         hid2_units = hid1_units/4 
         hid3_units = 5
-
         self.lr = 1e-2 / np.sqrt(hid2_units)
-        print('Value Params -- h1: {}, h2: {}, h3: {}, lr: {:.3g}'
-              .format(hid1_units, hid2_units, hid3_units, self.lr))
+
         y = Dense(hid1_units, activation='tanh')(obs)
         y = Dense(hid2_units, activation='tanh')(y)
         y = Dense(hid3_units, activation='tanh')(y)
@@ -51,9 +49,9 @@ class NNValueFunction(object):
             x: features
             y: target
         """
-
         if self.replay_buffer_x is None:
             x_train, y_train = x, y
+        #Concatenate previous X with new X to obtain x_train. Same with Y
         else:
             x_train = np.concatenate([x, self.replay_buffer_x])
             y_train = np.concatenate([y, self.replay_buffer_y])

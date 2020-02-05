@@ -1,5 +1,5 @@
 """
-NN Policy with KL Divergence Constraint
+NN Policy
 """
 import tensorflow.keras.backend as K
 from tensorflow.keras import Model
@@ -23,8 +23,8 @@ class Policy(object):
         self.epochs = 20
         self.trpo = TRPO(obs_dim, act_dim, hid1_size, delta, init_logvar)
         self.policy = self.trpo.get_layer('policy_nn')
-        #self.lr = 0.0003 #MountainCar OK 
-        self.lr = 0.00005 #LunarLander OK
+        self.lr = 0.0003 #MountainCar 
+        #self.lr = 0.00005 #LunarLander
         self.trpo.compile(optimizer=Adam(self.lr))
     
     def load_test(self, filepath):
@@ -89,13 +89,14 @@ class Policy(object):
             else:
                 self.trpo.save_weights(filepath)
         
+        #Save the weights as *.tf to load it and test with test.py
         self.trpo.save_weights('test.tf')
 
 
 
 
 
-# This layer (but is the entire NN) is used to calculate the policy approximation
+# This layer is an entire NN and is used to calculate the policy approximation
 # returning means and logvar
 class PolicyNN(Layer):
     """ Neural net for policy approximation function.

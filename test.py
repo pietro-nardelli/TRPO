@@ -6,8 +6,10 @@ from value import NNValueFunction
 import scipy.signal
 from utils import plotLearning
 
-#env_name = 'MountainCarContinuous-v0'   
-env_name = 'LunarLanderContinuous-v2'   
+import tensorflow as tf
+
+env_name = 'MountainCarContinuous-v0'   
+#env_name = 'LunarLanderContinuous-v2'   
 
 
 num_episodes=1000
@@ -57,23 +59,12 @@ def run_episode(env, policy, eps, animate=True):
         observes.append(obs)
         
         action = policy.sample(obs)
-        '''
-        #take an action from the policy
-        if (np.random.uniform(0,1) > eps):
-            action = policy.sample(obs)
-
-        else:
-            #take a random action, based on the dimension of the action space
-            action = np.zeros((1,env.action_space.shape[0]))
-            for i in range(env.action_space.shape[0]):
-                random_sample = env.action_space.sample()
-                action [0][i]= random_sample[i]
-        '''
+        
         actions.append(action)
         obs, reward, done, _ = env.step(action.flatten())
         rewards.append(reward)
         totalReward += reward
-    print (totalReward)
+    print ("Reward "+str(totalReward))
     return (np.concatenate(observes), np.concatenate(actions),
             np.array(rewards, dtype=np.float32), totalReward)
 
@@ -83,7 +74,8 @@ env.seed(11)
 
 policy = Policy(obs_dim, act_dim, delta, hid1_size, init_logvar)
 
-filepath = 'test.tf'
+filepath = 'models/mountain.tf'
+#filepath = 'models/lunar.tf'
 policy.load_test(filepath)
 
 episode = 0

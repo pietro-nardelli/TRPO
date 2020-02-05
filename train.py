@@ -10,17 +10,6 @@ from value import NNValueFunction
 import scipy.signal
 from utils import plotLearning
 
-#env_name = 'MountainCarContinuous-v0'   
-env_name = 'LunarLanderContinuous-v2'   
-
-num_episodes=5000
-gamma = 0.995                 # Discount factor
-delta = 0.005                 # D_KL target value
-batch_size = 5                # Number of episodes per training batch
-hid1_size = 32                # Size of the first hidden layer for value and policy NNs
-eps = 0.2                     # Epsilon: parameter for eps-greedy choice of action
-init_logvar = -1              # Initial policy natural log of variance
-
 
 def init_gym(env_name):
     env = gym.make(env_name)
@@ -96,14 +85,6 @@ def run_policy(env, policy, episodes):
     trajectories = []
     for e in range(episodes):
         observes, actions, rewards, totalReward = run_episode(env, policy, eps)
-        # print(observes.shape)
-        # print(actions.shape)
-        # print(rewards.shape)
-        # print(unscaled_obs.shape)
-        # print(observes.dtype)
-        # print(actions.dtype)
-        # print(rewards.dtype)
-        # print(unscaled_obs.dtype)
 
         total_steps += observes.shape[0]
         trajectory = {'observes': observes,
@@ -124,7 +105,7 @@ def add_disc_sum_rew(trajectories, gamma):
 
     Args:
         trajectories: as returned by run_policy()
-        gamma: discount
+        gamma: discount factor
 
     Returns:
         None (mutates trajectories dictionary to add 'disc_sum_rew')
@@ -158,10 +139,6 @@ def add_adv(trajectories):
     Args:
         trajectories: as returned by run_policy(), must include 'values'
             key from add_value().
-        gamma: reward discount
-        lam: lambda (see paper).
-            lam=0 : use TD residuals
-            lam=1 : A =  Sum Discounted Rewards - V_hat(s)
 
     Returns:
         None (mutates trajectories dictionary to add 'advantages')
@@ -204,18 +181,23 @@ def avg_batch_rewards (trajectories):
     avg = np.mean(total_reward)
     return avg
 
-""" Main training loop
 
-Args:
-    env_name: OpenAI Gym environment name, e.g. 'Hopper-v1'
-    num_episodes: maximum number of episodes to run
-    gamma: reward discount factor (float)
-    lam: lambda from Generalized Advantage Estimate
-    delta: D_KL target for policy update [D_KL(pi_old || pi_new)
-    batch_size: number of episodes per policy training batch
-    hid1_size: hid1 size for policy and value_f
-    init_logvar: natural log of initial policy variance
-"""
+
+
+""" TRAINING START HERE """
+
+env_name = 'MountainCarContinuous-v0'   
+#env_name = 'LunarLanderContinuous-v2'   
+
+num_episodes=5000             # OpenAI Gym environment name
+gamma = 0.995                 # Discount factor
+delta = 0.005                 # D_KL target value
+batch_size = 5                # Number of episodes per training batch
+hid1_size = 32                # Size of the first hidden layer for value and policy NN
+eps = 0.2                     # Epsilon: parameter for eps-greedy choice of action
+init_logvar = -1              # Initial policy natural log of variance
+
+
 env, obs_dim, act_dim = init_gym(env_name)
 env = gym.make(env_name)
 env.seed(11)
